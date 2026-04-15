@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
                                           `created_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
                                           `updated_at`     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
                                           PRIMARY KEY (`id`),
-                                          UNIQUE KEY `uk_username` (`username`),
-                                          UNIQUE KEY `uk_email` (`email`)
+                                          UNIQUE KEY `uk_email` (`email`),
+                                          UNIQUE KEY `uk_phone` (`phone`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4 COMMENT ='用户信息表';
 
