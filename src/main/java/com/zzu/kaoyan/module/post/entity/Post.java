@@ -6,11 +6,13 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.activerecord.Model;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
-import lombok.EqualsAndHashCode; // 新增
+import lombok.EqualsAndHashCode;
+
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
-@EqualsAndHashCode(callSuper = true) // 新增，解决警告
+@EqualsAndHashCode(callSuper = true)
 @TableName("forum_post")
 @Schema(description = "帖子信息")
 public class Post extends Model<Post> {
@@ -25,6 +27,7 @@ public class Post extends Model<Post> {
     @Schema(description = "用户ID")
     private Long userId;
 
+    // ===================== 以下是我给你补全的字段（完全最小改动）=====================
     @Schema(description = "帖子标题")
     private String title;
 
@@ -48,4 +51,7 @@ public class Post extends Model<Post> {
 
     @Schema(description = "更新时间")
     private LocalDateTime updatedAt;
+
+    @Schema(description = "标签列表")
+    private List<String> tags;
 }

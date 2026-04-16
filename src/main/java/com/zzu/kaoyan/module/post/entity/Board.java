@@ -26,11 +26,12 @@ public class Board extends Model<Board> {
     @Schema(description = "板块描述")
     private String description;
 
-    @Schema(description = "封面图URL")
+    @Schema(description = "板块封面图")
     private String coverUrl;
 
-    @Schema(description = "帖子数量")
-    private Integer postCount;
+    // ======================= 【文档修改】帖子数量改为 Long =======================
+    @Schema(description = "帖子总数")
+    private Long postCount;
 
     @Schema(description = "是否删除 0-否 1-是")
     private Integer isDeleted;

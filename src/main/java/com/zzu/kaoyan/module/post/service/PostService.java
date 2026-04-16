@@ -1,8 +1,12 @@
 package com.zzu.kaoyan.module.post.service;
 
-import com.baomidou.mybatisplus.extension.service.IService;
-import com.zzu.kaoyan.module.post.entity.Post;
 
-public interface PostService extends IService<Post> {
-    // 基础CRUD由IService自动提供，仅需自定义业务方法
+import com.github.pagehelper.PageInfo;
+import com.zzu.kaoyan.module.post.dto.PostDTO;
+import com.zzu.kaoyan.module.post.vo.PostDetailVO;
+
+public interface PostService {
+    Long createPost(PostDTO postDTO, Long userId);
+    PostDetailVO getPostDetail(Long postId, Long userId);
+    PageInfo<PostDetailVO> page(Integer pageNum, Integer pageSize);
 }
