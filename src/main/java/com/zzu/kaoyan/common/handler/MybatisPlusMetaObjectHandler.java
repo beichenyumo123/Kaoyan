@@ -7,7 +7,6 @@ import java.time.LocalDateTime;
 
 @Component // 必须要有这个注解！
 public class MybatisPlusMetaObjectHandler implements MetaObjectHandler {
-
     @Override
     public void insertFill(MetaObject metaObject) {
         // 这里的 "createdAt" 是你实体类里的属性名，不是数据库的字段名
