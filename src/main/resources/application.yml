@@ -1,8 +1,8 @@
 spring:
   datasource:
     url: jdbc:mysql://localhost:3306/kaoyan_forum?useSSL=false&serverTimezone=Asia/Shanghai # 建议用上海时区
-    username: db
-    password: db886
+    username: root
+    password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
 
 # 必须改为 mybatis-plus
