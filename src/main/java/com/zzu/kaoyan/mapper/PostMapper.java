@@ -14,4 +14,12 @@ public interface PostMapper extends BaseMapper<Post> {
      */
     @Update("UPDATE forum_post SET view_count = view_count + 1 WHERE id = #{id} AND is_deleted = 0")
     int updateViewCount(@Param("id") Long id);
+
+    /**
+     * 更新帖子点赞数（点赞/取消点赞）
+     * @param id 帖子ID
+     * @param delta 增量 (+1 点赞, -1 取消点赞)
+     */
+    @Update("UPDATE forum_post SET like_count = like_count + #{delta} WHERE id = #{id} AND is_deleted = 0")
+    int updateLikeCount(@Param("id") Long id, @Param("delta") int delta);
 }
