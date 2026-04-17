@@ -24,7 +24,7 @@ public class PostController {
     }
 
     // ===================== 1. 分页接口（放最前面，防止冲突） =====================
-    @Operation(summary = "分页查询帖子列表")
+    @Operation(summary = "分页查询所有板块帖子")
     @GetMapping("/page")
     public Result<PageInfo<PostDetailVO>> page(
             @RequestParam(defaultValue = "1") Integer pageNum,
