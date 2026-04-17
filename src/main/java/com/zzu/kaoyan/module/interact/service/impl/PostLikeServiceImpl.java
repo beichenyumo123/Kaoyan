@@ -26,7 +26,7 @@ public class PostLikeServiceImpl implements PostLikeService {
     public boolean toggleLike(Long postId) {
         // 1. 获取当前登录用户ID
         Long userId = StpUtil.getLoginIdAsLong();
-        //Long userId = 1L;//临时测接口
+
         // 2. 查询是否已点赞
         boolean hasLiked = likeMapper.exists(new LambdaQueryWrapper<ForumPostLike>()
                 .eq(ForumPostLike::getPostId, postId)
@@ -49,5 +49,17 @@ public class PostLikeServiceImpl implements PostLikeService {
             postMapper.updateLikeCount(postId, 1);
             return true;
         }
+    }
+
+    @Override
+    public boolean checkIsLiked(Long userId, Long postId) {
+        // ✅ 修改点：使用类中已注入的 likeMapper 代替 baseMapper
+        // ✅ 修改点：MyBatis-Plus 的 selectCount 返回类型建议使用 Long
+        Long count = likeMapper.selectCount(
+                new LambdaQueryWrapper<ForumPostLike>()
+                        .eq(ForumPostLike::getPostId, postId)
+                        .eq(ForumPostLike::getUserId, userId)
+        );
+        return count > 0;
     }
 }

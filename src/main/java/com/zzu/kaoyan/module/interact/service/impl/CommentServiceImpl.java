@@ -2,8 +2,11 @@ package com.zzu.kaoyan.module.interact.service.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zzu.kaoyan.common.entity.User;
+import com.zzu.kaoyan.mapper.UserMapper;
 import com.zzu.kaoyan.module.interact.entity.ForumComment;
 import com.zzu.kaoyan.module.interact.entity.dto.CommentDTO;
+import com.zzu.kaoyan.module.interact.entity.vo.CommentPublishVO;
 import com.zzu.kaoyan.module.interact.mapper.ForumCommentMapper;
 import com.zzu.kaoyan.module.interact.service.CommentService;
 import lombok.RequiredArgsConstructor;
@@ -12,29 +15,26 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class CommentServiceImpl implements CommentService {
 
     private final ForumCommentMapper commentMapper;
+    private final UserMapper userMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public Long publishComment(Long postId, Long replyToId, String content) {
-        // 获取当前登录用户ID
+    public CommentPublishVO publishComment(Long postId, Long replyToId, String content) {
         Long userId = StpUtil.getLoginIdAsLong();
 
-        // 1. 回复评论时，必须保证被回复的评论存在
         if (replyToId != null) {
             ForumComment replyComment = commentMapper.selectById(replyToId);
-            if (replyComment == null || replyComment.getIsDeleted() == 1) {
-                throw new RuntimeException("回复的评论不存在");
+            if (replyComment == null || Objects.equals(replyComment.getIsDeleted(), 1)) {
+                throw new RuntimeException("无法回复：目标评论已被删除或不存在");
             }
         }
 
-        // 2. 保存评论
         ForumComment comment = new ForumComment();
         comment.setPostId(postId);
         comment.setUserId(userId);
@@ -45,12 +45,18 @@ public class CommentServiceImpl implements CommentService {
         comment.setUpdatedAt(LocalDateTime.now());
         commentMapper.insert(comment);
 
-        return comment.getId();
+        User user = userMapper.selectById(userId);
+        CommentPublishVO vo = new CommentPublishVO();
+        vo.setCommentId(comment.getId());
+        if (user != null) {
+            vo.setUsername(user.getUsername());
+            vo.setAvatarUrl(user.getAvatarUrl());
+        }
+        return vo;
     }
 
     @Override
     public List<CommentDTO> getCommentTree(Long postId) {
-        // 1. 查询所有有效评论
         List<ForumComment> allComments = commentMapper.selectList(
                 new LambdaQueryWrapper<ForumComment>()
                         .eq(ForumComment::getPostId, postId)
@@ -58,7 +64,16 @@ public class CommentServiceImpl implements CommentService {
                         .orderByAsc(ForumComment::getCreatedAt)
         );
 
-        // 2. 转换为DTO并分组
+        if (allComments.isEmpty()) return new ArrayList<>();
+
+        // 批量准备用户信息
+        List<Long> userIds = allComments.stream().map(ForumComment::getUserId).distinct().toList();
+        List<User> userList = userMapper.selectBatchIds(userIds);
+        Map<Long, User> userMap = new HashMap<>();
+        if (userList != null) {
+            userList.forEach(u -> userMap.put(u.getId(), u));
+        }
+
         Map<Long, List<CommentDTO>> childrenMap = new HashMap<>();
         List<CommentDTO> rootComments = new ArrayList<>();
 
@@ -70,22 +85,23 @@ public class CommentServiceImpl implements CommentService {
             dto.setReplyToId(comment.getReplyToId());
             dto.setContent(comment.getContent());
             dto.setCreatedAt(comment.getCreatedAt());
+
+            User u = userMap.get(comment.getUserId());
+            dto.setUsername(u != null ? u.getUsername() : "用户已注销");
+            dto.setAvatarUrl(u != null ? u.getAvatarUrl() : null);
+
             dto.setChildren(new ArrayList<>());
 
             if (comment.getReplyToId() == null) {
-                // 顶层评论
                 rootComments.add(dto);
             } else {
-                // 回复评论，加入对应父节点的子列表
                 childrenMap.computeIfAbsent(comment.getReplyToId(), k -> new ArrayList<>()).add(dto);
             }
         }
 
-        // 3. 递归组装楼中楼结构
         for (CommentDTO root : rootComments) {
             buildTree(root, childrenMap);
         }
-
         return rootComments;
     }
 
@@ -101,11 +117,7 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     public List<ForumComment> getCommentList(Long postId) {
-        return commentMapper.selectList(
-                new LambdaQueryWrapper<ForumComment>()
-                        .eq(ForumComment::getPostId, postId)
-                        .eq(ForumComment::getIsDeleted, 0)
-                        .orderByAsc(ForumComment::getCreatedAt)
-        );
+        return commentMapper.selectList(new LambdaQueryWrapper<ForumComment>()
+                .eq(ForumComment::getPostId, postId).eq(ForumComment::getIsDeleted, 0));
     }
 }
