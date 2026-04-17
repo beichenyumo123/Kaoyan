@@ -113,9 +113,37 @@ CREATE TABLE IF NOT EXISTS `interaction_check_in` (
                                                       `created_date` DATE         NOT NULL COMMENT '打卡归属日期(YYYY-MM-DD)',
                                                       `created_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '具体打卡时间',
                                                       PRIMARY KEY (`id`),
+                                                      `continuous_days` INT(11)      NOT NULL DEFAULT 1 COMMENT '连续打卡天数',
                                                       UNIQUE KEY `uk_user_date` (`user_id`, `created_date`) COMMENT '每天每人只能打卡一次'
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4 COMMENT ='每日学习打卡表';
+
+-- 用户学习统计表
+CREATE TABLE IF NOT EXISTS `interaction_user_study` (
+    `id`               BIGINT(20)  NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`          BIGINT(20)  NOT NULL COMMENT '用户ID',
+    `continuous_days`   INT(11)     NOT NULL DEFAULT 0 COMMENT '当前连续打卡天数',
+    `total_check_days`  INT(11)     NOT NULL DEFAULT 0 COMMENT '累计打卡总天数',
+    `last_check_date`   DATE                 DEFAULT NULL COMMENT '最后一次打卡日期',
+    `updated_at`       DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4 COMMENT ='用户学习统计表';
+
+-- 积分变动日志表
+CREATE TABLE IF NOT EXISTS `interaction_points_log` (
+    `id`          BIGINT(20)   NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id`     BIGINT(20)   NOT NULL COMMENT '用户ID',
+    `points`      INT(11)      NOT NULL COMMENT '积分变动值(正为增加,负为扣减)',
+    `type`        VARCHAR(30)  NOT NULL COMMENT '积分类型: CHECK_IN, POST, COMMENT等',
+    `rel_id`      BIGINT(20)            DEFAULT NULL COMMENT '关联业务ID(如帖子ID)',
+    `description` VARCHAR(200)          DEFAULT NULL COMMENT '描述',
+    `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4 COMMENT ='积分变动日志表';
 
 -- 学习资料表
 CREATE TABLE IF NOT EXISTS `resource_file` (
@@ -134,3 +162,54 @@ CREATE TABLE IF NOT EXISTS `resource_file` (
                                                KEY `idx_board_id` (`board_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4 COMMENT ='学习资料表';
+  -- ======================================================
+  -- 考研论坛 - 打卡与积分激励模块 SQL
+  -- 模块：5号 - 打卡积分
+  -- 表数量：3张
+  -- ======================================================
+
+  USE kaoyan_forum;
+
+  -- 1. 每日学习打卡表
+  CREATE TABLE IF NOT EXISTS `interaction_check_in`
+  (
+      `id`              BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+      `user_id`         BIGINT(20) NOT NULL COMMENT '打卡用户ID',
+      `study_hours`     INT(11)    NOT NULL COMMENT '学习时长(小时)',
+      `notes`           VARCHAR(500)     DEFAULT NULL COMMENT '打卡日记/笔记',
+      `continuous_days`  INT(11)    NOT NULL DEFAULT 0 COMMENT '打卡时的连续天数',
+      `created_date`    DATE       NOT NULL COMMENT '打卡归属日期(YYYY-MM-DD)',
+      `created_at`      DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '具体打卡时间',
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `uk_user_date` (`user_id`, `created_date`) COMMENT '每天每人只能打卡一次'
+  ) ENGINE = InnoDB
+    DEFAULT CHARSET = utf8mb4 COMMENT ='每日学习打卡表';
+
+  -- 2. 用户学习打卡统计表（连续天数/累计天数）
+  CREATE TABLE IF NOT EXISTS `interaction_user_study`
+  (
+      `id`               BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+      `user_id`          BIGINT(20) NOT NULL COMMENT '用户ID',
+      `continuous_days`  INT(11)    NOT NULL DEFAULT 0 COMMENT '连续打卡天数',
+      `total_check_days` INT(11)    NOT NULL DEFAULT 0 COMMENT '累计打卡天数',
+      `last_check_date`  DATE                DEFAULT NULL COMMENT '最后一次打卡日期',
+      `updated_at`       DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (`id`),
+      UNIQUE KEY `uk_user_id` (`user_id`)
+  ) ENGINE = InnoDB
+    DEFAULT CHARSET = utf8mb4 COMMENT ='用户学习打卡统计';
+
+  -- 3. 积分变动日志表
+  CREATE TABLE IF NOT EXISTS `interaction_points_log`
+  (
+      `id`          BIGINT(20)  NOT NULL AUTO_INCREMENT COMMENT '日志ID',
+      `user_id`     BIGINT(20)  NOT NULL COMMENT '用户ID',
+      `points`      INT(11)     NOT NULL COMMENT '变动积分（正数增加）',
+      `type`        VARCHAR(30) NOT NULL COMMENT '类型：CHECK_IN/POST/LIKE/COMMENT/RESOURCE',
+      `rel_id`      BIGINT(20) DEFAULT NULL COMMENT '关联ID（打卡ID/帖子ID/评论ID）',
+      `description` VARCHAR(255) DEFAULT NULL COMMENT '描述',
+      `created_at`  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (`id`),
+      KEY `idx_user_id` (`user_id`)
+  ) ENGINE = InnoDB
+    DEFAULT CHARSET = utf8mb4 COMMENT ='积分变动日志表';

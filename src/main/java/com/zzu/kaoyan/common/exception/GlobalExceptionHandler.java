@@ -1,5 +1,6 @@
 package com.zzu.kaoyan.common.exception;
 
+import cn.dev33.satoken.exception.NotLoginException;
 import com.zzu.kaoyan.common.result.Result;
 import com.zzu.kaoyan.common.result.ResultCode;
 import lombok.extern.slf4j.Slf4j;
@@ -16,6 +17,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /**
+     * 处理 Sa-Token 未登录异常（token 无效、过期、未提供等）
+     */
+    @ExceptionHandler(NotLoginException.class)
+    public Result<Void> handleNotLoginException(NotLoginException e) {
+        log.warn("认证失败: {}", e.getMessage());
+        return Result.error(ResultCode.UNAUTHORIZED);
+    }
 
     /**
      * 处理自定义的业务异常 (例如：密码错误、用户被封禁等)
