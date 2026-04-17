@@ -22,8 +22,8 @@ public class User {
     private String targetMajor;
     private Integer points;
 
-    @TableLogic
     @TableField("is_deleted")
+    @TableLogic
     private Boolean deleted;      // 0未删, 1已删
 
     @TableField(fill = FieldFill.INSERT)
