@@ -2,6 +2,7 @@ package com.zzu.kaoyan.module.interact.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.zzu.kaoyan.common.result.Result;
+import com.zzu.kaoyan.module.interact.entity.ForumReport;
 import com.zzu.kaoyan.module.interact.entity.dto.SubmitReportDTO;
 // 假设你马上会建这个 Service
 import com.zzu.kaoyan.module.interact.service.ReportService;
@@ -9,6 +10,8 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zzu.kaoyan.module.interact.entity.dto.ReportQueryDTO;
 
 @RestController
 @RequestMapping("/api/interact/report")
@@ -35,5 +38,15 @@ public class ReportController {
         reportService.submitReport(reporterId, dto);
 
         return Result.success("举报提交成功，感谢您对社区环境的维护！");
+    }
+    @GetMapping("/admin/list")
+    @Operation(summary = "管理员获取举报列表 (分页/筛选)")
+    // @SaCheckRole("ADMIN") // 建议配合1号同学的安全模块，限制仅管理员可访问
+    public Result<Page<ForumReport>> getReportList(ReportQueryDTO queryDTO) {
+
+        // 分页查询由于是 GET 请求，参数直接拼在 URL 上，不需要 @RequestBody
+        Page<ForumReport> pageResult = reportService.getReportList(queryDTO);
+
+        return Result.success(pageResult);
     }
 }

@@ -3,13 +3,14 @@ package com.zzu.kaoyan.module.interact.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.zzu.kaoyan.module.interact.entity.ForumReport;
+import com.zzu.kaoyan.module.interact.entity.dto.ReportQueryDTO;
 import com.zzu.kaoyan.module.interact.entity.dto.SubmitReportDTO;
 import com.zzu.kaoyan.module.interact.mapper.ReportMapper;
 import com.zzu.kaoyan.module.interact.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import java.util.Arrays;
 import java.util.List;
 
@@ -51,5 +52,33 @@ public class ReportServiceImpl extends ServiceImpl<ReportMapper, ForumReport> im
 
         // 调用 MyBatis-Plus 提供的 save 方法直接入库
         this.save(report);
+    }
+
+    @Override
+    public Page<ForumReport> getReportList(ReportQueryDTO queryDTO) {
+        // 1. 初始化 MyBatis-Plus 分页对象
+        Page<ForumReport> pageParam = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
+
+        // 2. 构建动态查询条件
+        LambdaQueryWrapper<ForumReport> wrapper = new LambdaQueryWrapper<>();
+
+        // 如果前端传了 status 参数，就精确匹配 status
+        if (queryDTO.getStatus() != null) {
+            wrapper.eq(ForumReport::getStatus, queryDTO.getStatus());
+        }
+
+        // 如果前端传了 targetType 参数，就精确匹配类型
+        if (queryDTO.getTargetType() != null && !queryDTO.getTargetType().isEmpty()) {
+            wrapper.eq(ForumReport::getTargetType, queryDTO.getTargetType().toUpperCase());
+        }
+
+        // 3. 核心排序逻辑：
+        // 优先按照状态升序 (0-待处理排在最前面，方便审核人员第一眼看到)
+        // 状态相同时，按照创建时间降序 (最新提交的排在前面)
+        wrapper.orderByAsc(ForumReport::getStatus)
+                .orderByDesc(ForumReport::getCreatedAt);
+
+        // 4. 执行分页查询并返回
+        return this.page(pageParam, wrapper);
     }
 }
