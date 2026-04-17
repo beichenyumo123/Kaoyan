@@ -1,69 +1,62 @@
 package com.zzu.kaoyan.module.post.controller;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.stp.StpUtil;
+import com.github.pagehelper.PageInfo;
 import com.zzu.kaoyan.common.result.Result;
-import com.zzu.kaoyan.common.result.ResultCode;
-import com.zzu.kaoyan.mapper.PostMapper;
 import com.zzu.kaoyan.module.post.dto.PostDTO;
-import com.zzu.kaoyan.module.post.entity.Post;
 import com.zzu.kaoyan.module.post.service.PostService;
+import com.zzu.kaoyan.module.post.vo.PostDetailVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
-@Tag(name = "帖子接口")
 @RestController
-@RequestMapping("/posts")
-@RequiredArgsConstructor
+@RequestMapping("/api/posts")
+@Tag(name = "帖子管理", description = "发布帖子、获取帖子详情、分页查询帖子")
 public class PostController {
 
     private final PostService postService;
-    private final PostMapper postMapper; // 注入PostMapper
 
+    public PostController(PostService postService) {
+        this.postService = postService;
+    }
+
+    // ===================== 1. 分页接口（放最前面，防止冲突） =====================
+    @Operation(summary = "分页查询帖子列表")
+    @GetMapping("/page")
+    public Result<PageInfo<PostDetailVO>> page(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(postService.page(pageNum, pageSize));
+    }
+
+    // ===================== 2. 发布帖子（需登录） =====================
     @Operation(summary = "发布帖子")
     @PostMapping
-    public Result<Long> publish(@RequestBody PostDTO dto) {
-        Post post = new Post();
-        post.setBoardId(dto.getBoardId());
-        post.setTitle(dto.getTitle());
-        post.setContent(dto.getContent());
-        post.setUserId(1L);
-        post.setViewCount(0);
-        post.setLikeCount(0);
-        post.setCommentCount(0);
-        post.setIsDeleted(0);
-
-        boolean success = postService.save(post);
-        return success ? Result.success(post.getId())
-                : Result.error(ResultCode.SYSTEM_ERROR.getCode(), "发布失败");
+    @SaCheckLogin
+    public Result<Long> createPost(@Validated @RequestBody PostDTO postDTO) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        return Result.success(postService.createPost(postDTO, userId));
     }
 
-    @Operation(summary = "分页查询帖子")
-    @GetMapping("/page")
-    public Result<List<Post>> page(@RequestParam(required = false) Long boardId) {
-        LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Post::getIsDeleted, 0);
-        if (boardId != null) {
-            wrapper.eq(Post::getBoardId, boardId);
-        }
-        wrapper.orderByDesc(Post::getCreatedAt);
-
-        return Result.success(postService.list(wrapper));
-    }
-
+    // ===================== 3. 帖子详情（放最后 + 正则，彻底解决报错） =====================
     @Operation(summary = "获取帖子详情")
-    @GetMapping("/{id}")
-    public Result<Post> detail(@PathVariable Long id) {
-        Post post = postService.getById(id);
-        if (post == null || post.getIsDeleted() == 1) {
-            return Result.error(ResultCode.NOT_FOUND.getCode(), "帖子不存在");
-        }
-
-        // 正确调用：直接注入PostMapper，调用自定义方法
-        postMapper.updateViewCount(id);
-        return Result.success(post);
+    @GetMapping("/{postId:\\d+}")
+    public Result<PostDetailVO> getPostDetail(@PathVariable Long postId) {
+        Long userId = StpUtil.isLogin() ? StpUtil.getLoginIdAsLong() : null;
+        return Result.success(postService.getPostDetail(postId, userId));
     }
+
+    @Operation(summary = "根据板块ID分页查询帖子")
+    @GetMapping("/board/{boardId}")
+    public Result<PageInfo<PostDetailVO>> getPostsByBoardId(
+            @PathVariable Long boardId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(postService.getPostsByBoardId(boardId, pageNum, pageSize));
+    }
+
+
 }
