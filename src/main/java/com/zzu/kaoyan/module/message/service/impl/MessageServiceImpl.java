@@ -1,22 +1,27 @@
 package com.zzu.kaoyan.module.message.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zzu.kaoyan.common.entity.User;
 import com.zzu.kaoyan.mapper.MessageMapper;
+import com.zzu.kaoyan.mapper.UserMapper;
+import com.zzu.kaoyan.module.message.dto.MessageContactVO;
 import com.zzu.kaoyan.module.message.dto.MessageConversationVO;
 import com.zzu.kaoyan.module.message.dto.MessageSendDTO;
-import com.zzu.kaoyan.module.message.entity.Message;  // ⚠️ 必须导入这行
+import com.zzu.kaoyan.module.message.entity.Message;
 import com.zzu.kaoyan.module.message.service.MessageService;
 import org.springframework.stereotype.Service;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class MessageServiceImpl implements MessageService {
 
     private final MessageMapper messageMapper;
+    private final UserMapper userMapper;
 
-    public MessageServiceImpl(MessageMapper messageMapper) {
+    public MessageServiceImpl(MessageMapper messageMapper, UserMapper userMapper) {
         this.messageMapper = messageMapper;
+        this.userMapper = userMapper;
     }
 
     @Override
@@ -41,9 +46,16 @@ public class MessageServiceImpl implements MessageService {
         ).orderByDesc(Message::getCreateTime);
 
         List<Message> messages = messageMapper.selectList(wrapper);
+        if (messages.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 查询用户信息
+        User currentUser = userMapper.selectById(currentUserId);
+        User otherUser = userMapper.selectById(otherUserId);
 
         return messages.stream()
-                .map(this::convertToConversationVO)
+                .map(msg -> convertToConversationVO(msg, currentUser, otherUser))
                 .collect(Collectors.toList());
     }
 
@@ -65,14 +77,106 @@ public class MessageServiceImpl implements MessageService {
         return messageMapper.updateById(message) > 0;
     }
 
-    private MessageConversationVO convertToConversationVO(Message message) {
+    @Override
+    public List<MessageContactVO> getContactList(Long userId) {
+        // 查询与该用户有私信往来的所有消息
+        LambdaQueryWrapper<Message> wrapper = new LambdaQueryWrapper<>();
+        wrapper.and(w -> w
+                .eq(Message::getFromUserId, userId)
+                .or()
+                .eq(Message::getToUserId, userId)
+        );
+        List<Message> messages = messageMapper.selectList(wrapper);
+
+        // 收集所有对话过的用户ID
+        Set<Long> contactIds = new HashSet<>();
+        for (Message msg : messages) {
+            if (msg.getFromUserId().equals(userId)) {
+                contactIds.add(msg.getToUserId());
+            } else {
+                contactIds.add(msg.getFromUserId());
+            }
+        }
+
+        if (contactIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 查询这些用户的信息
+        LambdaQueryWrapper<User> userWrapper = new LambdaQueryWrapper<>();
+        userWrapper.in(User::getId, contactIds);
+        List<User> users = userMapper.selectList(userWrapper);
+        Map<Long, User> userMap = users.stream().collect(Collectors.toMap(User::getId, u -> u));
+
+        // 构建返回结果
+        List<MessageContactVO> result = new ArrayList<>();
+        for (Long contactId : contactIds) {
+            User contact = userMap.get(contactId);
+            if (contact == null) continue;
+
+            MessageContactVO vo = new MessageContactVO();
+            vo.setUserId(contact.getId());
+            vo.setUsername(contact.getUsername());
+            vo.setAvatarUrl(contact.getAvatarUrl());
+
+            // 查询最后一条消息
+            LambdaQueryWrapper<Message> lastMsgWrapper = new LambdaQueryWrapper<>();
+            lastMsgWrapper.and(w -> w
+                    .eq(Message::getFromUserId, userId)
+                    .eq(Message::getToUserId, contactId)
+                    .or()
+                    .eq(Message::getFromUserId, contactId)
+                    .eq(Message::getToUserId, userId)
+            ).orderByDesc(Message::getCreateTime).last("LIMIT 1");
+            Message lastMsg = messageMapper.selectOne(lastMsgWrapper);
+
+            if (lastMsg != null) {
+                vo.setLastMessage(lastMsg.getContent());
+                vo.setLastMessageTime(lastMsg.getCreateTime());
+            }
+
+            // 查询未读消息数
+            LambdaQueryWrapper<Message> unreadWrapper = new LambdaQueryWrapper<>();
+            unreadWrapper.eq(Message::getFromUserId, contactId)
+                    .eq(Message::getToUserId, userId)
+                    .eq(Message::getIsRead, 0);
+            vo.setUnreadCount(messageMapper.selectCount(unreadWrapper));
+
+            result.add(vo);
+        }
+
+        // 按最后消息时间排序
+        result.sort((a, b) -> {
+            if (a.getLastMessageTime() == null) return 1;
+            if (b.getLastMessageTime() == null) return -1;
+            return b.getLastMessageTime().compareTo(a.getLastMessageTime());
+        });
+
+        return result;
+    }
+
+    private MessageConversationVO convertToConversationVO(Message msg, User currentUser, User otherUser) {
         MessageConversationVO vo = new MessageConversationVO();
-        vo.setId(message.getId());
-        vo.setFromUserId(message.getFromUserId());
-        vo.setToUserId(message.getToUserId());
-        vo.setContent(message.getContent());
-        vo.setIsRead(message.getIsRead());
-        vo.setCreateTime(message.getCreateTime());
+        vo.setId(msg.getId());
+        vo.setFromUserId(msg.getFromUserId());
+        vo.setToUserId(msg.getToUserId());
+        vo.setContent(msg.getContent());
+        vo.setIsRead(msg.getIsRead());
+        vo.setCreateTime(msg.getCreateTime());
+
+        // 根据发送者ID设置用户名和头像
+        if (msg.getFromUserId().equals(currentUser.getId())) {
+            vo.setFromUsername(currentUser.getUsername());
+            vo.setFromAvatarUrl(currentUser.getAvatarUrl());
+            vo.setToUsername(otherUser.getUsername());
+            vo.setToAvatarUrl(otherUser.getAvatarUrl());
+        } else {
+            vo.setFromUsername(otherUser.getUsername());
+            vo.setFromAvatarUrl(otherUser.getAvatarUrl());
+            vo.setToUsername(currentUser.getUsername());
+            vo.setToAvatarUrl(currentUser.getAvatarUrl());
+        }
+
         return vo;
     }
 }

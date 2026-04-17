@@ -62,4 +62,13 @@ public class MessageController {
         boolean success = messageService.markAsRead(messageId, currentUserId);
         return success ? Result.success("已标记为已读") : Result.error("操作失败");
     }
+
+    @GetMapping("/contacts")
+    @Operation(summary = "获取私信联系人列表", description = "返回当前用户最近聊过天的联系人列表")
+    @SaCheckLogin
+    public Result<List<MessageContactVO>> getContactList() {
+        Long currentUserId = getCurrentUserId();
+        List<MessageContactVO> contacts = messageService.getContactList(currentUserId);
+        return Result.success(contacts);
+    }
 }
