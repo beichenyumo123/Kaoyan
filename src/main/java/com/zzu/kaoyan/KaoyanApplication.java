@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfi
 
 
 @SpringBootApplication
-@MapperScan("com.zzu.kaoyan.mapper")
+@MapperScan("com.zzu.kaoyan.**.mapper")
 public class KaoyanApplication {
 
 	public static void main(String[] args) {
