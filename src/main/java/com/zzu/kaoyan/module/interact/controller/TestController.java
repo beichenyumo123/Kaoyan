@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/test")
 public class TestController {
-    //@SaIgnore
+    @SaIgnore
     @GetMapping("/mock-login")
     public Result<String> mockLogin() {
         // 强行让 ID 为 1001 的测试用户登录（假设数据库里有这个用户，或者只要是个Long型就行）
