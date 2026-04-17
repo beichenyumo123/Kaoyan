@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zzu.kaoyan.mapper.UserMapper">
+    <update id="addPoints">
+        update sys_user set points = points + #{points} where id = #{userId}
+    </update>
+
+    <select id="getPointsById" resultType="java.lang.Integer">
+        select points from sys_user where id = #{userId}
+    </select>
+
+    <select id="selectRankList" resultType="java.util.Map">
+        select u.id, u.username, u.avatar_url, u.points,
+        ifnull(s.continuous_days,0) as continuousDays
+        from sys_user u
+        left join interaction_user_study s on u.id = s.user_id
+        where u.is_deleted = 0
+        order by u.points desc limit 30
+    </select>
+</mapper>
