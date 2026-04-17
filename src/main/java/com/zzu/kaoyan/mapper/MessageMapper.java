@@ -1,4 +1,4 @@
-package com.zzu.kaoyan.module.message.mapper;
+package com.zzu.kaoyan.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.zzu.kaoyan.module.message.entity.Message;

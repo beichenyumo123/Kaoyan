@@ -1,10 +1,9 @@
 package com.zzu.kaoyan.module.message.service;
 
-import com.baomidou.mybatisplus.extension.service.IService;
 import com.zzu.kaoyan.module.message.entity.Message;
 import java.util.List;
 
-public interface MessageService extends IService<Message> {
+public interface MessageService {
 
     boolean sendMessage(Long fromUserId, Long toUserId, String content);
 

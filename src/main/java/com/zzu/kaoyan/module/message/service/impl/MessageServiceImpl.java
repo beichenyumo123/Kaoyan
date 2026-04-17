@@ -1,15 +1,21 @@
 package com.zzu.kaoyan.module.message.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.zzu.kaoyan.mapper.MessageMapper;
 import com.zzu.kaoyan.module.message.entity.Message;
-import com.zzu.kaoyan.module.message.mapper.MessageMapper;
 import com.zzu.kaoyan.module.message.service.MessageService;
 import org.springframework.stereotype.Service;
 import java.util.List;
 
 @Service
-public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> implements MessageService {
+public class MessageServiceImpl implements MessageService {
+
+    private final MessageMapper messageMapper;
+
+    // 构造器注入（和 UserServiceImpl 风格一致）
+    public MessageServiceImpl(MessageMapper messageMapper) {
+        this.messageMapper = messageMapper;
+    }
 
     @Override
     public boolean sendMessage(Long fromUserId, Long toUserId, String content) {
@@ -18,7 +24,7 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         message.setToUserId(toUserId);
         message.setContent(content);
         message.setIsRead(0);
-        return save(message);
+        return messageMapper.insert(message) > 0;
     }
 
     @Override
@@ -31,7 +37,7 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
                 .eq(Message::getFromUserId, otherUserId)
                 .eq(Message::getToUserId, currentUserId)
         ).orderByDesc(Message::getCreateTime);
-        return list(wrapper);
+        return messageMapper.selectList(wrapper);
     }
 
     @Override
@@ -39,16 +45,16 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         LambdaQueryWrapper<Message> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Message::getToUserId, userId)
                 .eq(Message::getIsRead, 0);
-        return count(wrapper);
+        return messageMapper.selectCount(wrapper);
     }
 
     @Override
     public boolean markAsRead(Long messageId, Long userId) {
-        Message message = getById(messageId);
+        Message message = messageMapper.selectById(messageId);
         if (message == null || !message.getToUserId().equals(userId)) {
             return false;
         }
         message.setIsRead(1);
-        return updateById(message);
+        return messageMapper.updateById(message) > 0;
     }
 }
