@@ -1,28 +1,36 @@
 package com.zzu.kaoyan.module.message.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.zzu.kaoyan.module.message.entity.Message;
-import com.zzu.kaoyan.module.message.mapper.MessageMapper;
+import com.zzu.kaoyan.mapper.MessageMapper;
+import com.zzu.kaoyan.module.message.dto.MessageConversationVO;
+import com.zzu.kaoyan.module.message.dto.MessageSendDTO;
+import com.zzu.kaoyan.module.message.entity.Message;  // ⚠️ 必须导入这行
 import com.zzu.kaoyan.module.message.service.MessageService;
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
-public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> implements MessageService {
+public class MessageServiceImpl implements MessageService {
 
-    @Override
-    public boolean sendMessage(Long fromUserId, Long toUserId, String content) {
-        Message message = new Message();
-        message.setFromUserId(fromUserId);
-        message.setToUserId(toUserId);
-        message.setContent(content);
-        message.setIsRead(0);
-        return save(message);
+    private final MessageMapper messageMapper;
+
+    public MessageServiceImpl(MessageMapper messageMapper) {
+        this.messageMapper = messageMapper;
     }
 
     @Override
-    public List<Message> getConversation(Long currentUserId, Long otherUserId) {
+    public boolean sendMessage(Long fromUserId, MessageSendDTO sendDTO) {
+        Message message = new Message();
+        message.setFromUserId(fromUserId);
+        message.setToUserId(sendDTO.getToUserId());
+        message.setContent(sendDTO.getContent());
+        message.setIsRead(0);
+        return messageMapper.insert(message) > 0;
+    }
+
+    @Override
+    public List<MessageConversationVO> getConversation(Long currentUserId, Long otherUserId) {
         LambdaQueryWrapper<Message> wrapper = new LambdaQueryWrapper<>();
         wrapper.and(w -> w
                 .eq(Message::getFromUserId, currentUserId)
@@ -31,7 +39,12 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
                 .eq(Message::getFromUserId, otherUserId)
                 .eq(Message::getToUserId, currentUserId)
         ).orderByDesc(Message::getCreateTime);
-        return list(wrapper);
+
+        List<Message> messages = messageMapper.selectList(wrapper);
+
+        return messages.stream()
+                .map(this::convertToConversationVO)
+                .collect(Collectors.toList());
     }
 
     @Override
@@ -39,16 +52,27 @@ public class MessageServiceImpl extends ServiceImpl<MessageMapper, Message> impl
         LambdaQueryWrapper<Message> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Message::getToUserId, userId)
                 .eq(Message::getIsRead, 0);
-        return count(wrapper);
+        return messageMapper.selectCount(wrapper);
     }
 
     @Override
     public boolean markAsRead(Long messageId, Long userId) {
-        Message message = getById(messageId);
+        Message message = messageMapper.selectById(messageId);
         if (message == null || !message.getToUserId().equals(userId)) {
             return false;
         }
         message.setIsRead(1);
-        return updateById(message);
+        return messageMapper.updateById(message) > 0;
+    }
+
+    private MessageConversationVO convertToConversationVO(Message message) {
+        MessageConversationVO vo = new MessageConversationVO();
+        vo.setId(message.getId());
+        vo.setFromUserId(message.getFromUserId());
+        vo.setToUserId(message.getToUserId());
+        vo.setContent(message.getContent());
+        vo.setIsRead(message.getIsRead());
+        vo.setCreateTime(message.getCreateTime());
+        return vo;
     }
 }

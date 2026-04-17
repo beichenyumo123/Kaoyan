@@ -1,14 +1,14 @@
 package com.zzu.kaoyan.module.message.service;
 
-import com.baomidou.mybatisplus.extension.service.IService;
-import com.zzu.kaoyan.module.message.entity.Message;
+import com.zzu.kaoyan.module.message.dto.MessageConversationVO;
+import com.zzu.kaoyan.module.message.dto.MessageSendDTO;
 import java.util.List;
 
-public interface MessageService extends IService<Message> {
+public interface MessageService {
 
-    boolean sendMessage(Long fromUserId, Long toUserId, String content);
+    boolean sendMessage(Long fromUserId, MessageSendDTO sendDTO);
 
-    List<Message> getConversation(Long currentUserId, Long otherUserId);
+    List<MessageConversationVO> getConversation(Long currentUserId, Long otherUserId);
 
     Long getUnreadCount(Long userId);
 
