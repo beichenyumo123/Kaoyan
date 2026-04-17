@@ -1,9 +1,11 @@
 package com.zzu.kaoyan.module.post.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.extension.activerecord.Model;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -52,6 +54,8 @@ public class Post extends Model<Post> {
     @Schema(description = "更新时间")
     private LocalDateTime updatedAt;
 
+
     @Schema(description = "标签列表")
+    @TableField(typeHandler = JacksonTypeHandler.class) // 关键：指定 JSON 处理器
     private List<String> tags;
 }

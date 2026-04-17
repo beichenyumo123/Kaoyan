@@ -62,19 +62,27 @@ public class PostServiceImpl implements PostService {
         wrapper.eq(Post::getId, postId).setSql("view_count = view_count + 1");
         postMapper.update(null, wrapper);
 
-        User author = authMapper.selectById(post.getUserId());
-        if (author == null) {
-            throw new BusinessException(500, "作者信息异常");
-        }
-
         PostDetailVO vo = new PostDetailVO();
         BeanUtils.copyProperties(post, vo);
 
+        // ===================== 加固开始 =====================
+        User author = null;
+        if (post.getUserId() != null && post.getUserId() > 0) {
+            author = authMapper.selectById(post.getUserId());
+        }
+
         PostDetailVO.AuthorVO authorVO = new PostDetailVO.AuthorVO();
-        authorVO.setUserId(author.getId());
-        authorVO.setUsername(author.getUsername());
-        authorVO.setAvatarUrl(author.getAvatarUrl());
+        if (author != null) {
+            authorVO.setUserId(author.getId());
+            authorVO.setUsername(author.getUsername() == null ? "匿名用户" : author.getUsername());
+            authorVO.setAvatarUrl(author.getAvatarUrl());
+        } else {
+            authorVO.setUserId(0L);
+            authorVO.setUsername("匿名/已注销用户");
+            authorVO.setAvatarUrl("");
+        }
         vo.setAuthor(authorVO);
+        // ===================== 加固结束 =====================
 
         vo.setIsLiked(false);
         return vo;
@@ -104,6 +112,52 @@ public class PostServiceImpl implements PostService {
                 vo.setAuthor(authorVO);
             }
 
+            vo.setIsLiked(false);
+            return vo;
+        }).collect(Collectors.toList());
+
+        PageInfo<PostDetailVO> result = new PageInfo<>();
+        BeanUtils.copyProperties(pageInfo, result);
+        result.setList(voList);
+        return result;
+    }
+
+
+    @Override
+    public PageInfo<PostDetailVO> getPostsByBoardId(Long boardId, Integer pageNum, Integer pageSize) {
+        PageHelper.startPage(pageNum, pageSize);
+
+        LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<Post>()
+                .eq(Post::getBoardId, boardId)
+                .eq(Post::getIsDeleted, 0)
+                .orderByDesc(Post::getCreatedAt);
+
+        List<Post> postList = postMapper.selectList(wrapper);
+        PageInfo<Post> pageInfo = new PageInfo<>(postList);
+
+        List<PostDetailVO> voList = pageInfo.getList().stream().map(post -> {
+            PostDetailVO vo = new PostDetailVO();
+            BeanUtils.copyProperties(post, vo);
+
+            // 脏数据加固
+            User author = null;
+            if (post.getUserId() != null && post.getUserId() > 0) {
+                author = authMapper.selectById(post.getUserId());
+            }
+
+            PostDetailVO.AuthorVO authorVO = new PostDetailVO.AuthorVO();
+            if (author != null) {
+                authorVO.setUserId(author.getId());
+                authorVO.setUsername(author.getUsername() == null ? "匿名用户" : author.getUsername());
+                authorVO.setAvatarUrl(author.getAvatarUrl());
+            } else {
+                authorVO.setUserId(0L);
+                authorVO.setUsername("匿名/已注销用户");
+                authorVO.setAvatarUrl("");
+            }
+            vo.setAuthor(authorVO);
+
+            // 点赞状态（默认false，不报错）
             vo.setIsLiked(false);
             return vo;
         }).collect(Collectors.toList());

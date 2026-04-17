@@ -24,7 +24,7 @@ public class PostController {
     }
 
     // ===================== 1. 分页接口（放最前面，防止冲突） =====================
-    @Operation(summary = "分页查询帖子列表")
+    @Operation(summary = "分页查询所有板块帖子")
     @GetMapping("/page")
     public Result<PageInfo<PostDetailVO>> page(
             @RequestParam(defaultValue = "1") Integer pageNum,
@@ -48,5 +48,15 @@ public class PostController {
         Long userId = StpUtil.isLogin() ? StpUtil.getLoginIdAsLong() : null;
         return Result.success(postService.getPostDetail(postId, userId));
     }
+
+    @Operation(summary = "根据板块ID分页查询帖子")
+    @GetMapping("/board/{boardId}")
+    public Result<PageInfo<PostDetailVO>> getPostsByBoardId(
+            @PathVariable Long boardId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(postService.getPostsByBoardId(boardId, pageNum, pageSize));
+    }
+
 
 }

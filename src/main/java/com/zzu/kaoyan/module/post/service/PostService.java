@@ -9,4 +9,5 @@ public interface PostService {
     Long createPost(PostDTO postDTO, Long userId);
     PostDetailVO getPostDetail(Long postId, Long userId);
     PageInfo<PostDetailVO> page(Integer pageNum, Integer pageSize);
+    PageInfo<PostDetailVO> getPostsByBoardId(Long boardId, Integer pageNum, Integer pageSize);
 }
