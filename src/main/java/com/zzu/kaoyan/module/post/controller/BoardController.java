@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 
 @Tag(name = "论坛板块")
 @RestController
-@RequestMapping("/boards")
+@RequestMapping("/api/boards")
 @RequiredArgsConstructor
 public class BoardController {
 

@@ -13,7 +13,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/posts")
+@RequestMapping("/api/posts")
 @Tag(name = "帖子管理", description = "发布帖子、获取帖子详情、分页查询帖子")
 public class PostController {
 

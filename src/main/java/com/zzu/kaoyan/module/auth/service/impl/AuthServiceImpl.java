@@ -13,17 +13,13 @@ import cn.hutool.crypto.digest.BCrypt;
 @Service
 public class AuthServiceImpl implements AuthService {
     private final AuthMapper authMapper;
-    // 使用接口类型更佳
 
-    // 构造器注入（如果只有一个构造器，@Autowired 可以省略）
     public AuthServiceImpl(AuthMapper authMapper) {
         this.authMapper = authMapper;
     }
 
-
-        @Override
-    public User verifyAccountAndPassword(String account,String password) {
-       // 方式二：直接 new LambdaQueryWrapper（推荐，语义更清晰）
+    @Override
+    public User verifyAccountAndPassword(String account, String password) {
         LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.and(wrapper -> wrapper
                 .eq(User::getEmail, account)
@@ -32,16 +28,13 @@ public class AuthServiceImpl implements AuthService {
 
         User user = authMapper.selectOne(queryWrapper);
 
-        if(user==null){
-            throw new BusinessException(400,"用户不存在");
+        if (user == null) {
+            throw new BusinessException(400, "用户不存在");
         }
-        //TODO 密码校验
 
-        // 密码校验
         if (!BCrypt.checkpw(password, user.getPassword())) {
             throw new BusinessException(400, "账号或密码错误");
         }
-        // 返回前隐藏密码
         user.setPassword(null);
         return user;
     }
@@ -49,15 +42,19 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public void register(RegisterDTO registerDTO) {
         checkUserExists(registerDTO);
-        User user=new User();
+        User user = new User();
         BeanUtils.copyProperties(registerDTO, user);
         user.setRole("USER");
         user.setPassword(BCrypt.hashpw(user.getPassword(), BCrypt.gensalt()));
+
+        // ⚠️ 关键修改：插入后，MyBatis-Plus 会自动将生成的 ID 回填到 user 对象
         authMapper.insert(user);
+
+        // 此时 user.getId() 就是数据库自动生成的正确 ID
+        System.out.println("注册成功，生成的用户ID: " + user.getId());
     }
 
     private void checkUserExists(RegisterDTO registerDTO) {
-        // 1. 校验邮箱和手机号是否已被注册（提前友好提示）
         LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.and(wrapper -> wrapper
                 .eq(User::getEmail, registerDTO.getEmail())
@@ -67,12 +64,11 @@ public class AuthServiceImpl implements AuthService {
         User existUser = authMapper.selectOne(queryWrapper);
         if (existUser != null) {
             if (registerDTO.getEmail().equals(existUser.getEmail())) {
-                throw new BusinessException(400,"该邮箱已被注册");
+                throw new BusinessException(400, "该邮箱已被注册");
             }
-            if (registerDTO.getPhone().equals(existUser.getPhone())) {
-                throw new BusinessException(400,"该手机号已被注册");
+            if (registerDTO.getPhone() != null && registerDTO.getPhone().equals(existUser.getPhone())) {
+                throw new BusinessException(400, "该手机号已被注册");
             }
         }
     }
-
 }

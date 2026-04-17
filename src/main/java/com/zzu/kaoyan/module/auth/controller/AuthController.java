@@ -9,12 +9,14 @@ import com.zzu.kaoyan.module.auth.entity.RegisterDTO;
 import com.zzu.kaoyan.module.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/auth")
 @Tag(name = "登录与注册", description = "用户注册与登录接口")
@@ -48,6 +50,8 @@ public class AuthController {
         loginVO.setUsername(user.getUsername());
         loginVO.setRole(user.getRole());
         loginVO.setAvatarUrl(user.getAvatarUrl());
+
+        log.info("登录成功！{},{}",loginVO.getUserId(),loginVO.getUsername());
 
         return Result.success(loginVO);
     }

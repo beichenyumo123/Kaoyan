@@ -1,6 +1,5 @@
 package com.zzu.kaoyan.common.entity;
 
-
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -9,7 +8,7 @@ import java.time.LocalDateTime;
 @TableName("sys_user")
 public class User {
 
-    @TableId(value = "id", type = IdType.ASSIGN_ID)
+    @TableId(value = "id", type = IdType.AUTO)  // ✅ 改成 AUTO，使用数据库自增
     private Long id;
 
     private String username;
@@ -17,14 +16,14 @@ public class User {
     private String email;
     private String phone;
 
-    private String role;          // USER, MODERATOR, ADMIN
+    private String role;
     private String avatarUrl;
     private String targetMajor;
     private Integer points;
 
     @TableField("is_deleted")
     @TableLogic
-    private Boolean deleted;      // 0未删, 1已删
+    private Boolean deleted;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
