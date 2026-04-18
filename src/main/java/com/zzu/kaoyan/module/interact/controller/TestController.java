@@ -14,7 +14,7 @@ public class TestController {
     @GetMapping("/mock-login")
     public Result<String> mockLogin() {
         // 强行让 ID 为 1001 的测试用户登录（假设数据库里有这个用户，或者只要是个Long型就行）
-        StpUtil.login(1L);
+        StpUtil.login(101L);
         
         // 获取生成的 Token 字符串并返回
         return Result.success(StpUtil.getTokenValue());
