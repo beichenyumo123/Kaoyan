@@ -1,5 +1,8 @@
 package com.zzu.kaoyan.module.interact.service;
 
+import com.github.pagehelper.PageInfo;
+import com.zzu.kaoyan.module.post.vo.PostDetailVO;
+
 /**
  * 帖子收藏服务接口
  */
@@ -16,5 +19,6 @@ public interface PostCollectService {
      */
     boolean isCollected(Long userId, Long postId);
 
-
+    // 在 PostCollectService.java 中添加
+    PageInfo<PostDetailVO> getUserCollectedPosts(Long userId, Integer pageNum, Integer pageSize);
 }

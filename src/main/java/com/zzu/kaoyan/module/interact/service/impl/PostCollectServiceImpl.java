@@ -2,20 +2,26 @@ package com.zzu.kaoyan.module.interact.service.impl;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.github.pagehelper.PageHelper;
+import com.github.pagehelper.PageInfo;
 import com.zzu.kaoyan.module.interact.entity.ForumPostCollect;
 import com.zzu.kaoyan.module.interact.mapper.ForumPostCollectMapper;
 import com.zzu.kaoyan.module.interact.service.PostCollectService;
+import com.zzu.kaoyan.module.post.vo.PostDetailVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.zzu.kaoyan.mapper.PostMapper;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class PostCollectServiceImpl implements PostCollectService {
 
     private final ForumPostCollectMapper collectMapper;
+    private final PostMapper postMapper;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -54,5 +60,19 @@ public class PostCollectServiceImpl implements PostCollectService {
                 .eq(ForumPostCollect::getUserId, userId));
     }
 
+    // 在 PostCollectServiceImpl.java 中实现
+    @Override
+    public PageInfo<PostDetailVO> getUserCollectedPosts(Long userId, Integer pageNum, Integer pageSize) {
+        // 1. 开启分页
+        PageHelper.startPage(pageNum, pageSize);
 
+        // 2. 这里的逻辑通常有两种：
+        // 方案 A：在 PostMapper 中写一个专门的 Join SQL（性能最好）
+        // 方案 B：先查出收藏的 post_id 列表，再通过 postService 查详情（开发快）
+
+        // 推荐方案 A，我们需要在 PostMapper 中自定义查询
+        List<PostDetailVO> list = postMapper.selectCollectedPostsByUserId(userId);
+
+        return new PageInfo<>(list);
+    }
 }

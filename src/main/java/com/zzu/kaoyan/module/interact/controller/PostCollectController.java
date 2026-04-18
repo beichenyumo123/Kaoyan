@@ -2,8 +2,10 @@ package com.zzu.kaoyan.module.interact.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
+import com.github.pagehelper.PageInfo;
 import com.zzu.kaoyan.common.result.Result;
 import com.zzu.kaoyan.module.interact.service.PostCollectService;
+import com.zzu.kaoyan.module.post.vo.PostDetailVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -36,5 +38,15 @@ public class PostCollectController {
         Long userId = StpUtil.getLoginIdAsLong();
         boolean isCollected = postCollectService.isCollected(userId, postId);
         return Result.success(isCollected);
+    }
+
+    @Operation(summary = "获取当前用户收藏的帖子列表")
+    @GetMapping("/my")
+    @SaCheckLogin
+    public Result<PageInfo<PostDetailVO>> getMyCollections(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        return Result.success(postCollectService.getUserCollectedPosts(userId, pageNum, pageSize));
     }
 }
