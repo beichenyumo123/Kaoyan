@@ -7,4 +7,6 @@ public interface PostLikeService {
      * @return true=点赞成功, false=取消点赞成功
      */
     boolean toggleLike(Long postId);
+
+    boolean checkIsLiked(Long userId, Long postId);
 }
