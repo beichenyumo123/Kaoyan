@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zzu.kaoyan.module.activity.mapper.UserStudyMapper">
+    <select id="selectByUserId" resultType="com.zzu.kaoyan.module.activity.entity.po.UserStudyPO">
+        select id, user_id, continuous_days, total_check_days, last_check_date, updated_at
+        from interaction_user_study
+        where user_id = #{userId}
+    </select>
+</mapper>

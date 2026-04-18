@@ -162,12 +162,12 @@ CREATE TABLE IF NOT EXISTS `resource_file` (
                                                KEY `idx_board_id` (`board_id`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4 COMMENT ='学习资料表';
+
   -- ======================================================
   -- 考研论坛 - 打卡与积分激励模块 SQL
   -- 模块：5号 - 打卡积分
   -- 表数量：3张
   -- ======================================================
-
   USE kaoyan_forum;
 
   -- 1. 每日学习打卡表
@@ -213,3 +213,4 @@ CREATE TABLE IF NOT EXISTS `resource_file` (
       KEY `idx_user_id` (`user_id`)
   ) ENGINE = InnoDB
     DEFAULT CHARSET = utf8mb4 COMMENT ='积分变动日志表';
+   ALTER TABLE interaction_check_in MODIFY COLUMN id BIGINT NOT NULL AUTO_INCREMENT;
