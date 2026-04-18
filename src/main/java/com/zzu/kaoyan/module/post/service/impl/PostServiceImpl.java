@@ -1,9 +1,13 @@
 package com.zzu.kaoyan.module.post.service.impl;
 
+import com.zzu.kaoyan.mapper.LikeMapper;
+import com.zzu.kaoyan.module.post.entity.Like;
+import cn.dev33.satoken.stp.StpUtil;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.zzu.kaoyan.mapper.LikeMapper;
 import com.zzu.kaoyan.module.post.entity.Post;
 import com.zzu.kaoyan.common.entity.User;
 import com.zzu.kaoyan.common.exception.BusinessException;
@@ -20,15 +24,19 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+
 @Service
 public class PostServiceImpl implements PostService {
 
     private final PostMapper postMapper;
     private final AuthMapper authMapper;
+    private final LikeMapper likeMapper ;
 
-    public PostServiceImpl(PostMapper postMapper, AuthMapper authMapper) {
+
+    public PostServiceImpl(PostMapper postMapper, AuthMapper authMapper, LikeMapper likeMapper) {
         this.postMapper = postMapper;
         this.authMapper = authMapper;
+        this.likeMapper = likeMapper;
     }
 
     // ===================== 发布帖子 =====================
@@ -159,6 +167,78 @@ public class PostServiceImpl implements PostService {
 
             // 点赞状态（默认false，不报错）
             vo.setIsLiked(false);
+            return vo;
+        }).collect(Collectors.toList());
+
+        PageInfo<PostDetailVO> result = new PageInfo<>();
+        BeanUtils.copyProperties(pageInfo, result);
+        result.setList(voList);
+        return result;
+    }
+
+    /*统计帖子总数实现*/
+    @Override
+    public Long countUserPost(Long userId) {
+        LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<Post>()
+                .eq(Post::getUserId, userId)
+                .eq(Post::getIsDeleted, 0);
+        // MyBatis-Plus 自带count，高效统计
+        return postMapper.selectCount(wrapper);
+    }
+
+    /*用户发帖分页列表实现（全套加固）*/
+    @Override
+    public PageInfo<PostDetailVO> listUserPost(Long userId, Integer pageNum, Integer pageSize) {
+        PageHelper.startPage(pageNum, pageSize);
+
+        // 查询条件：指定用户 + 未删除 + 按发布时间最新倒序
+        LambdaQueryWrapper<Post> wrapper = new LambdaQueryWrapper<Post>()
+                .eq(Post::getUserId, userId)
+                .eq(Post::getIsDeleted, 0)
+                .orderByDesc(Post::getCreatedAt);
+
+        List<Post> postList = postMapper.selectList(wrapper);
+        PageInfo<Post> pageInfo = new PageInfo<>(postList);
+
+        // 封装VO，沿用你全部历史加固逻辑
+        List<PostDetailVO> voList = pageInfo.getList().stream().map(post -> {
+            PostDetailVO vo = new PostDetailVO();
+            BeanUtils.copyProperties(post, vo);
+
+            // ========== 作者信息脏数据兜底（解决之前500崩溃问题） ==========
+            User author = null;
+            if (post.getUserId() != null && post.getUserId() > 0) {
+                author = authMapper.selectById(post.getUserId());
+            }
+            PostDetailVO.AuthorVO authorVO = new PostDetailVO.AuthorVO();
+            if (author != null) {
+                authorVO.setUserId(author.getId());
+                authorVO.setUsername(author.getUsername() == null ? "匿名用户" : author.getUsername());
+                authorVO.setAvatarUrl(author.getAvatarUrl());
+            } else {
+                authorVO.setUserId(0L);
+                authorVO.setUsername("匿名/已注销用户");
+                authorVO.setAvatarUrl("");
+            }
+            vo.setAuthor(authorVO);
+
+            // ========== 点赞状态动态查询（不再写死false，带异常兜底） ==========
+            boolean isLiked = false;
+            Long currentLoginUserId = StpUtil.isLogin() ? StpUtil.getLoginIdAsLong() : null;
+            if (currentLoginUserId != null && currentLoginUserId > 0) {
+                try {
+                    Long count = likeMapper.selectCount(
+                            new LambdaQueryWrapper<Like>()
+                                    .eq(Like::getPostId, post.getId())
+                                    .eq(Like::getUserId, currentLoginUserId)
+                    );
+                    isLiked = count != null && count > 0;
+                } catch (Exception ignored) {
+                    isLiked = false;
+                }
+            }
+            vo.setIsLiked(isLiked);
+
             return vo;
         }).collect(Collectors.toList());
 
