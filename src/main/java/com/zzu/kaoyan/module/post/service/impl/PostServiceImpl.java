@@ -9,6 +9,10 @@ import com.zzu.kaoyan.common.entity.User;
 import com.zzu.kaoyan.common.exception.BusinessException;
 import com.zzu.kaoyan.mapper.AuthMapper;
 import com.zzu.kaoyan.mapper.PostMapper;
+// === 修改开始：导入必要的类 ===
+import com.zzu.kaoyan.module.interact.entity.UserStats;
+import com.zzu.kaoyan.module.interact.mapper.UserStatsMapper;
+// === 修改结束 ===
 import com.zzu.kaoyan.module.post.dto.PostDTO;
 import com.zzu.kaoyan.module.post.service.PostService;
 import com.zzu.kaoyan.module.post.vo.PostDetailVO;
@@ -25,11 +29,15 @@ public class PostServiceImpl implements PostService {
 
     private final PostMapper postMapper;
     private final AuthMapper authMapper;
+    // === 修改开始：注入统计 Mapper ===
+    private final UserStatsMapper userStatsMapper;
 
-    public PostServiceImpl(PostMapper postMapper, AuthMapper authMapper) {
+    public PostServiceImpl(PostMapper postMapper, AuthMapper authMapper, UserStatsMapper userStatsMapper) {
         this.postMapper = postMapper;
         this.authMapper = authMapper;
+        this.userStatsMapper = userStatsMapper;
     }
+    // === 修改结束 ===
 
     // ===================== 发布帖子 =====================
     @Override
@@ -47,8 +55,31 @@ public class PostServiceImpl implements PostService {
         post.setUpdatedAt(LocalDateTime.now());
 
         postMapper.insert(post);
+
+        // === 修改开始：发帖成功后增加发帖数统计 ===
+        this.incrUserPostCount(userId, 1);
+        // === 修改结束 ===
+
         return post.getId();
     }
+
+    // === 修改开始：增加统计更新私有方法，处理记录不存在的情况 ===
+    /**
+     * 原子增加/减少用户发帖总数
+     */
+    private void incrUserPostCount(Long userId, int delta) {
+        // 尝试更新
+        int affectedRows = userStatsMapper.updatePostCount(userId, delta);
+        // 如果没有记录则创建
+        if (affectedRows == 0) {
+            UserStats stats = new UserStats();
+            stats.setUserId(userId);
+            stats.setPostCount(Math.max(0, delta));
+            stats.setLikeReceivedCount(0);
+            userStatsMapper.insert(stats);
+        }
+    }
+    // === 修改结束 ===
 
     // ===================== 帖子详情 =====================
     @Override
