@@ -41,6 +41,28 @@ public class PostController {
         return Result.success(postService.createPost(postDTO, userId));
     }
 
+    /**       4.
+     * 接口1：根据用户ID，查询该用户发布的帖子总数
+     */
+    @Operation(summary = "查询指定用户发布的帖子总数")
+    @GetMapping("/user/{userId}/count")
+    public Result<Long> getUserPostCount(@PathVariable Long userId) {
+        return Result.success(postService.countUserPost(userId));
+    }
+
+    /**       5.
+     * 接口2：根据用户ID，分页查询该用户发布的所有帖子
+     */
+    @Operation(summary = "分页查询指定用户发布的全部帖子")
+    @GetMapping("/user/{userId}/list")
+    public Result<PageInfo<PostDetailVO>> getUserPostList(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize
+    ) {
+        return Result.success(postService.listUserPost(userId, pageNum, pageSize));
+    }
+
     // ===================== 3. 帖子详情（放最后 + 正则，彻底解决报错） =====================
     @Operation(summary = "获取帖子详情")
     @GetMapping("/{postId:\\d+}")
@@ -57,6 +79,5 @@ public class PostController {
             @RequestParam(defaultValue = "10") Integer pageSize) {
         return Result.success(postService.getPostsByBoardId(boardId, pageNum, pageSize));
     }
-
 
 }
