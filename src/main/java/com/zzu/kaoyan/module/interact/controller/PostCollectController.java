@@ -1,6 +1,7 @@
 package com.zzu.kaoyan.module.interact.controller;
 
 import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.stp.StpUtil;
 import com.zzu.kaoyan.common.result.Result;
 import com.zzu.kaoyan.module.interact.service.PostCollectService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,5 +27,14 @@ public class PostCollectController {
         // 调用 Service 层处理收藏逻辑
         boolean result = postCollectService.toggleCollect(postId);
         return Result.success(result);
+    }
+
+    @Operation(summary = "查询当前用户是否收藏该帖子")
+    @GetMapping("/status/{postId}")
+    @SaCheckLogin
+    public Result<Boolean> getCollectStatus(@PathVariable Long postId) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        boolean isCollected = postCollectService.isCollected(userId, postId);
+        return Result.success(isCollected);
     }
 }

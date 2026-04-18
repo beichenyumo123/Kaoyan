@@ -15,4 +15,6 @@ public interface PostCollectService {
      * 检查用户是否收藏了某个帖子
      */
     boolean isCollected(Long userId, Long postId);
+
+
 }

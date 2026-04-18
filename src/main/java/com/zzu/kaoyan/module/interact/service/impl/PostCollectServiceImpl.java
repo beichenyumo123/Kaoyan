@@ -53,4 +53,6 @@ public class PostCollectServiceImpl implements PostCollectService {
                 .eq(ForumPostCollect::getPostId, postId)
                 .eq(ForumPostCollect::getUserId, userId));
     }
+
+
 }
