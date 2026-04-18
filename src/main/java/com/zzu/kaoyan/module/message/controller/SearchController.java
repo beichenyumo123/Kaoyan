@@ -6,7 +6,7 @@ import com.zzu.kaoyan.common.entity.User;
 import com.zzu.kaoyan.common.result.Result;
 import com.zzu.kaoyan.mapper.UserMapper;
 import com.zzu.kaoyan.module.post.entity.Post;
-import com.zzu.kaoyan.module.post.mapper.PostMapper;
+import com.zzu.kaoyan.mapper.PostMapper;
 import com.zzu.kaoyan.module.message.dto.SearchResultVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

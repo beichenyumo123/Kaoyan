@@ -16,5 +16,6 @@ public class RankServiceImpl implements RankService {
     @Override
     public List<Map<String, Object>> getTotalRank() {
         return userMapper.selectRankList();
+        //return null;
     }
 }

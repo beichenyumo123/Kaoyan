@@ -3,6 +3,7 @@ package com.zzu.kaoyan.module.message.controller;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
 import com.zzu.kaoyan.common.result.Result;
+import com.zzu.kaoyan.module.message.dto.MessageContactVO;
 import com.zzu.kaoyan.module.message.dto.MessageConversationVO;
 import com.zzu.kaoyan.module.message.dto.MessageSendDTO;
 import com.zzu.kaoyan.module.message.service.MessageService;
