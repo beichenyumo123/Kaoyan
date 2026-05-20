@@ -1,5 +1,6 @@
 package com.zzu.kaoyan.module.auth.entity;
 
+import com.zzu.kaoyan.common.annotation.SkipXssClean;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -16,6 +17,7 @@ public class RegisterDTO {
     @Schema(description = "用户名", example = "zhangsan", requiredMode = Schema.RequiredMode.REQUIRED)
     private String username;
 
+    @SkipXssClean
     @NotBlank(message = "密码不能为空")
     @Size(min = 6, max = 20, message = "密码长度必须在6-20之间")
     @Schema(description = "密码", example = "password123", requiredMode = Schema.RequiredMode.REQUIRED)
