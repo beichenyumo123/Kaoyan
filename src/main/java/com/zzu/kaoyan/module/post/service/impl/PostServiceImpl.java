@@ -1,21 +1,23 @@
 package com.zzu.kaoyan.module.post.service.impl;
 
-import com.zzu.kaoyan.mapper.LikeMapper;
-import com.zzu.kaoyan.module.post.entity.Like;
 import cn.dev33.satoken.stp.StpUtil;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.zzu.kaoyan.mapper.LikeMapper;
+import com.zzu.kaoyan.module.post.entity.Like;
 import com.zzu.kaoyan.module.post.entity.Post;
 import com.zzu.kaoyan.common.entity.User;
 import com.zzu.kaoyan.common.exception.BusinessException;
+import com.zzu.kaoyan.common.util.SensitiveWordUtil;
 import com.zzu.kaoyan.mapper.AuthMapper;
 import com.zzu.kaoyan.mapper.PostMapper;
 import com.zzu.kaoyan.module.post.dto.PostDTO;
 import com.zzu.kaoyan.module.post.service.PostService;
 import com.zzu.kaoyan.module.post.vo.PostDetailVO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class PostServiceImpl implements PostService {
+
+    private static final Logger log = LoggerFactory.getLogger(PostServiceImpl.class);
 
     private final PostMapper postMapper;
     private final AuthMapper authMapper;
@@ -45,6 +49,18 @@ public class PostServiceImpl implements PostService {
     public Long createPost(PostDTO postDTO, Long userId) {
         Post post = new Post();
         BeanUtils.copyProperties(postDTO, post);
+
+        // 敏感词过滤
+        SensitiveWordUtil.FilterResult titleResult = SensitiveWordUtil.filter(post.getTitle());
+        if (titleResult.isHasSensitive()) {
+            log.warn("帖子标题包含敏感词 — userId={}, matched={}", userId, titleResult.getMatched());
+            post.setTitle(titleResult.getFilteredText());
+        }
+        SensitiveWordUtil.FilterResult contentResult = SensitiveWordUtil.filter(post.getContent());
+        if (contentResult.isHasSensitive()) {
+            log.warn("帖子内容包含敏感词 — userId={}, matched={}", userId, contentResult.getMatched());
+            post.setContent(contentResult.getFilteredText());
+        }
 
         post.setUserId(userId);
         post.setViewCount(0);

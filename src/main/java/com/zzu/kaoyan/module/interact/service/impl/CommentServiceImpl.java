@@ -3,6 +3,7 @@ package com.zzu.kaoyan.module.interact.service.impl;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zzu.kaoyan.common.entity.User;
+import com.zzu.kaoyan.common.util.SensitiveWordUtil;
 import com.zzu.kaoyan.mapper.UserMapper;
 import com.zzu.kaoyan.module.interact.entity.ForumComment;
 import com.zzu.kaoyan.module.interact.entity.dto.CommentDTO;
@@ -10,6 +11,8 @@ import com.zzu.kaoyan.module.interact.entity.vo.CommentPublishVO;
 import com.zzu.kaoyan.module.interact.mapper.ForumCommentMapper;
 import com.zzu.kaoyan.module.interact.service.CommentService;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +22,8 @@ import java.util.*;
 @Service
 @RequiredArgsConstructor
 public class CommentServiceImpl implements CommentService {
+
+    private static final Logger log = LoggerFactory.getLogger(CommentServiceImpl.class);
 
     private final ForumCommentMapper commentMapper;
     private final UserMapper userMapper;
@@ -35,11 +40,17 @@ public class CommentServiceImpl implements CommentService {
             }
         }
 
+        // 敏感词过滤
+        SensitiveWordUtil.FilterResult result = SensitiveWordUtil.filter(content);
+        if (result.isHasSensitive()) {
+            log.warn("评论包含敏感词 — userId={}, matched={}", userId, result.getMatched());
+        }
+
         ForumComment comment = new ForumComment();
         comment.setPostId(postId);
         comment.setUserId(userId);
         comment.setReplyToId(replyToId);
-        comment.setContent(content);
+        comment.setContent(result.getFilteredText());
         comment.setIsDeleted(0);
         comment.setCreatedAt(LocalDateTime.now());
         comment.setUpdatedAt(LocalDateTime.now());

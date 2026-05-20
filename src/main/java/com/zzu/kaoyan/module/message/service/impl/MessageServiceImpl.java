@@ -2,6 +2,7 @@ package com.zzu.kaoyan.module.message.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zzu.kaoyan.common.entity.User;
+import com.zzu.kaoyan.common.util.SensitiveWordUtil;
 import com.zzu.kaoyan.mapper.MessageMapper;
 import com.zzu.kaoyan.mapper.UserMapper;
 import com.zzu.kaoyan.module.message.dto.MessageContactVO;
@@ -9,12 +10,16 @@ import com.zzu.kaoyan.module.message.dto.MessageConversationVO;
 import com.zzu.kaoyan.module.message.dto.MessageSendDTO;
 import com.zzu.kaoyan.module.message.entity.Message;
 import com.zzu.kaoyan.module.message.service.MessageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class MessageServiceImpl implements MessageService {
+
+    private static final Logger log = LoggerFactory.getLogger(MessageServiceImpl.class);
 
     private final MessageMapper messageMapper;
     private final UserMapper userMapper;
@@ -26,10 +31,16 @@ public class MessageServiceImpl implements MessageService {
 
     @Override
     public boolean sendMessage(Long fromUserId, MessageSendDTO sendDTO) {
+        // 敏感词过滤
+        SensitiveWordUtil.FilterResult result = SensitiveWordUtil.filter(sendDTO.getContent());
+        if (result.isHasSensitive()) {
+            log.warn("私信包含敏感词 — fromUserId={}, matched={}", fromUserId, result.getMatched());
+        }
+
         Message message = new Message();
         message.setFromUserId(fromUserId);
         message.setToUserId(sendDTO.getToUserId());
-        message.setContent(sendDTO.getContent());
+        message.setContent(result.getFilteredText());
         message.setIsRead(0);
         return messageMapper.insert(message) > 0;
     }
