@@ -17,4 +17,12 @@ public class LoginDTO {
     @NotBlank(message = "密码不能为空")
     @Schema(description = "用户密码", example = "password123", requiredMode = Schema.RequiredMode.REQUIRED)
     private String password;
+
+    @NotBlank(message = "验证码不能为空")
+    @Schema(description = "验证码内容", example = "A3x9", requiredMode = Schema.RequiredMode.REQUIRED)
+    private String captchaCode;
+
+    @NotBlank(message = "验证码标识不能为空")
+    @Schema(description = "验证码UUID", example = "a1b2c3d4e5f6", requiredMode = Schema.RequiredMode.REQUIRED)
+    private String captchaUuid;
 }

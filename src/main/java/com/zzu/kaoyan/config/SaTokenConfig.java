@@ -23,7 +23,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
                             .notMatch(
                                     "/api/auth/login",
                                     "/api/auth/register",
-                                    "/api/boards",     // 假设获取板块列表不需要登录
+                                    "/api/auth/captcha",
+                                    "/api/boards",
                                     "/swagger-ui/**",
                                     "/api-docs/**",
                                     "/doc.html"
