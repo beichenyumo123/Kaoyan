@@ -73,6 +73,12 @@
 			<version>5.8.36</version>
 		</dependency>
 
+		<!-- WebSocket -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-websocket</artifactId>
+		</dependency>
+
 		<!-- AOP -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
