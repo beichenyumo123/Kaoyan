@@ -445,3 +445,79 @@ GET /api/posts/hot?pageNum=1&pageSize=10
 **冷启动**：若 Redis 中无数据（首次部署），接口返回空的 PageInfo，不报错。
 
 ---
+
+## 6. 文件上传（2026-05-20 新增）
+
+### 6.1 上传图片
+
+```
+POST /api/upload/image
+```
+
+**需登录**。`Content-Type: multipart/form-data`。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `file` | MultipartFile | 是 | 图片文件，≤ 10MB |
+
+**格式限制**：`jpg`、`jpeg`、`png`、`gif`、`webp`（三重校验：扩展名 + MIME 类型 + 文件头魔数）。
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "url": "/uploads/images/202605/a1b2c3d4e5f67890.png"
+  }
+}
+```
+
+### 6.2 上传视频
+
+```
+POST /api/upload/video
+```
+
+**需登录**。`Content-Type: multipart/form-data`。
+
+| 参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `file` | MultipartFile | 是 | 视频文件，≤ 100MB |
+
+**格式限制**：`mp4`、`webm`。
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "url": "/uploads/videos/202605/b2c3d4e5f67890ab.mp4"
+  }
+}
+```
+
+### 前端对接流程
+
+```
+1. 用户在 Markdown 编辑器中选择/粘贴图片
+     ↓
+2. POST /api/upload/image (FormData { file })
+     ↓
+3. 拿到 { url } → 插入编辑器: ![](/uploads/images/202605/xxx.png)
+     ↓
+4. 编辑器渲染 Markdown → 生成 <img src="/uploads/images/202605/xxx.png">
+     ↓
+5. 提交帖子 content = 渲染后的 HTML
+     ↓
+6. Jackson Jsoup 清洗 → 存库（清除 onerror 等事件属性）
+     ↓
+7. 前端渲染帖子详情: v-html="content" / dangerouslySetInnerHTML
+```
+
+> 文件访问 URL = `http://localhost:8081` + 返回的 `url` 路径。存储路径按 `uploads/{images,videos}/{yyyyMM}/{uuid}.{ext}` 组织。
+
+---
