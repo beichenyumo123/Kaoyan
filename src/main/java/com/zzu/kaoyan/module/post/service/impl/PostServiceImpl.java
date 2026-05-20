@@ -19,11 +19,13 @@ import com.zzu.kaoyan.module.post.vo.PostDetailVO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ZSetOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 
@@ -34,13 +36,16 @@ public class PostServiceImpl implements PostService {
 
     private final PostMapper postMapper;
     private final AuthMapper authMapper;
-    private final LikeMapper likeMapper ;
+    private final LikeMapper likeMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
 
 
-    public PostServiceImpl(PostMapper postMapper, AuthMapper authMapper, LikeMapper likeMapper) {
+    public PostServiceImpl(PostMapper postMapper, AuthMapper authMapper, LikeMapper likeMapper,
+                           RedisTemplate<String, Object> redisTemplate) {
         this.postMapper = postMapper;
         this.authMapper = authMapper;
         this.likeMapper = likeMapper;
+        this.redisTemplate = redisTemplate;
     }
 
     // ===================== 发布帖子 =====================
@@ -262,5 +267,106 @@ public class PostServiceImpl implements PostService {
         BeanUtils.copyProperties(pageInfo, result);
         result.setList(voList);
         return result;
+    }
+
+    // ===================== 热门推荐 =====================
+    @Override
+    public PageInfo<PostDetailVO> getHotPosts(int pageNum, int pageSize) {
+        try {
+            Long total = redisTemplate.opsForZSet().zCard("hot:posts");
+            if (total == null || total == 0) {
+                return new PageInfo<>();
+            }
+
+            int start = (pageNum - 1) * pageSize;
+            int end = start + pageSize - 1;
+
+            Set<ZSetOperations.TypedTuple<Object>> rangeWithScores =
+                    redisTemplate.opsForZSet().reverseRangeWithScores("hot:posts", start, end);
+
+            if (rangeWithScores == null || rangeWithScores.isEmpty()) {
+                return new PageInfo<>();
+            }
+
+            List<Long> postIds = rangeWithScores.stream()
+                    .map(t -> toLong(t.getValue()))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+
+            if (postIds.isEmpty()) {
+                return new PageInfo<>();
+            }
+
+            List<Post> posts = postMapper.selectBatchIds(postIds);
+            Map<Long, Post> postMap = posts.stream()
+                    .filter(p -> p.getIsDeleted() == 0)
+                    .collect(Collectors.toMap(Post::getId, p -> p, (a, b) -> a, LinkedHashMap::new));
+
+            List<PostDetailVO> voList = new ArrayList<>();
+            for (Long postId : postIds) {
+                Post post = postMap.get(postId);
+                if (post == null) continue;
+                voList.add(toPostDetailVO(post));
+            }
+
+            PageInfo<PostDetailVO> result = new PageInfo<>();
+            result.setTotal(total);
+            result.setPageNum(pageNum);
+            result.setPageSize(pageSize);
+            result.setPages((int) Math.ceil((double) total / pageSize));
+            result.setList(voList);
+            result.setSize(voList.size());
+            result.setHasNextPage((long) pageNum * pageSize < total);
+            result.setHasPreviousPage(pageNum > 1);
+            return result;
+        } catch (Exception e) {
+            log.error("获取热门帖子失败", e);
+            return new PageInfo<>();
+        }
+    }
+
+    private PostDetailVO toPostDetailVO(Post post) {
+        PostDetailVO vo = new PostDetailVO();
+        BeanUtils.copyProperties(post, vo);
+
+        User author = null;
+        if (post.getUserId() != null && post.getUserId() > 0) {
+            author = authMapper.selectById(post.getUserId());
+        }
+
+        PostDetailVO.AuthorVO authorVO = new PostDetailVO.AuthorVO();
+        if (author != null) {
+            authorVO.setUserId(author.getId());
+            authorVO.setUsername(author.getUsername() == null ? "匿名用户" : author.getUsername());
+            authorVO.setAvatarUrl(author.getAvatarUrl());
+        } else {
+            authorVO.setUserId(0L);
+            authorVO.setUsername("匿名/已注销用户");
+            authorVO.setAvatarUrl("");
+        }
+        vo.setAuthor(authorVO);
+
+        boolean isLiked = false;
+        Long currentLoginUserId = StpUtil.isLogin() ? StpUtil.getLoginIdAsLong() : null;
+        if (currentLoginUserId != null && currentLoginUserId > 0) {
+            try {
+                Long count = likeMapper.selectCount(
+                        new LambdaQueryWrapper<Like>()
+                                .eq(Like::getPostId, post.getId())
+                                .eq(Like::getUserId, currentLoginUserId));
+                isLiked = count != null && count > 0;
+            } catch (Exception ignored) {
+                isLiked = false;
+            }
+        }
+        vo.setIsLiked(isLiked);
+        return vo;
+    }
+
+    private Long toLong(Object value) {
+        if (value instanceof Long) return (Long) value;
+        if (value instanceof Integer) return ((Integer) value).longValue();
+        if (value instanceof Number) return ((Number) value).longValue();
+        return null;
     }
 }

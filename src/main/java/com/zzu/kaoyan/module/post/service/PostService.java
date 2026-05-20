@@ -26,4 +26,9 @@ public interface PostService {
      * @return 帖子分页列表
      */
     PageInfo<PostDetailVO> listUserPost(Long userId, Integer pageNum, Integer pageSize);
+
+    /**
+     * 热门推荐（基于 HN 热度算法，Redis ZSet 分页）
+     */
+    PageInfo<PostDetailVO> getHotPosts(int pageNum, int pageSize);
 }

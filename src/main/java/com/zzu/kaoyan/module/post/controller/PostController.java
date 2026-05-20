@@ -63,6 +63,14 @@ public class PostController {
         return Result.success(postService.listUserPost(userId, pageNum, pageSize));
     }
 
+    @Operation(summary = "热门推荐（基于 HN 热度算法）")
+    @GetMapping("/hot")
+    public Result<PageInfo<PostDetailVO>> getHotPosts(
+            @RequestParam(defaultValue = "1") Integer pageNum,
+            @RequestParam(defaultValue = "10") Integer pageSize) {
+        return Result.success(postService.getHotPosts(pageNum, pageSize));
+    }
+
     // ===================== 3. 帖子详情（放最后 + 正则，彻底解决报错） =====================
     @Operation(summary = "获取帖子详情")
     @GetMapping("/{postId:\\d+}")

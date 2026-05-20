@@ -392,3 +392,56 @@ GET /api/admin/dashboard
 **权限说明**：仅 `ADMIN` 角色可访问，非管理员返回 403。
 
 ---
+
+## 5. 热门推荐（2026-05-20 新增）
+
+### 5.1 获取热门帖子
+
+```
+GET /api/posts/hot?pageNum=1&pageSize=10
+```
+
+**无需登录**。
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "total": 156,
+    "pageNum": 1,
+    "pageSize": 10,
+    "pages": 16,
+    "list": [
+      {
+        "id": 128,
+        "title": "2026 考研数学一真题解析",
+        "content": "<p>分享一些解题技巧...</p>",
+        "likeCount": 42,
+        "viewCount": 356,
+        "commentCount": 18,
+        "createdAt": "2026-05-20T10:30:00",
+        "author": {
+          "userId": 6,
+          "username": "DB",
+          "avatarUrl": "https://..."
+        },
+        "isLiked": false
+      }
+    ]
+  }
+}
+```
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `pageNum` | Integer | 否 | 1 | 页码 |
+| `pageSize` | Integer | 否 | 10 | 每页条数 |
+
+**算法说明**：基于 Hacker News 热度衰减公式 — `Score = (likeCount − 1) / (T + 2)^1.8`，其中 T 为发布至今的小时数。每 10 分钟由定时任务重新计算并写入 Redis ZSet，接口从 Redis 直接分页取回，不实时计算。
+
+**冷启动**：若 Redis 中无数据（首次部署），接口返回空的 PageInfo，不报错。
+
+---
