@@ -59,6 +59,12 @@
 			<version>2.6.0</version>
 		</dependency>
 
+		<!-- AOP -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-aop</artifactId>
+		</dependency>
+
 		<!-- Redis -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
