@@ -16,4 +16,6 @@ public interface UserMapper extends BaseMapper<User> {
     Integer getPointsById(@Param("userId") Long userId);
 
     List<Map<String, Object>> selectRankList();
+
+    List<Map<String, Object>> selectTopActiveUsers(@Param("limit") int limit);
 }

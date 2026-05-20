@@ -18,4 +18,24 @@
         where u.is_deleted = 0
         order by u.points desc limit 30
     </select>
+
+    <select id="selectTopActiveUsers" resultType="java.util.Map">
+        SELECT u.id, u.username, u.avatar_url, SUM(sub.cnt) AS total
+        FROM sys_user u
+        INNER JOIN (
+            SELECT user_id, COUNT(*) AS cnt
+            FROM forum_post
+            WHERE is_deleted = 0
+            GROUP BY user_id
+            UNION ALL
+            SELECT user_id, COUNT(*) AS cnt
+            FROM forum_comment
+            WHERE is_deleted = 0
+            GROUP BY user_id
+        ) sub ON u.id = sub.user_id
+        WHERE u.is_deleted = 0
+        GROUP BY u.id, u.username, u.avatar_url
+        ORDER BY total DESC
+        LIMIT #{limit}
+    </select>
 </mapper>

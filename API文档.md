@@ -341,3 +341,54 @@ ws://localhost:8081/ws/chat/{groupId}?satoken={token}
 > **注意**：历史消息（离线消息）通过 `GET /api/chat/groups/{groupId}/messages` 获取，初次进入群聊页面时应先拉取历史，再建立 WebSocket 接收实时消息。
 
 ---
+
+## 4. 管理后台 — 数据看板（2026-05-20 新增）
+
+### 4.1 获取看板数据
+
+```
+GET /api/admin/dashboard
+```
+
+**需登录 + ADMIN 角色**。
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "totalUsers": 1280,
+    "todayPosts": 56,
+    "topActiveUsers": [
+      {
+        "id": 6,
+        "username": "DB",
+        "avatar_url": "https://...",
+        "total": 89
+      },
+      {
+        "id": 12,
+        "username": "考研达人",
+        "avatar_url": "https://...",
+        "total": 67
+      }
+    ]
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `totalUsers` | Long | 平台总用户数（未删除） |
+| `todayPosts` | Long | 今日新增帖子数 |
+| `topActiveUsers` | List | 最活跃 Top 5 用户（发帖数 + 评论数总和） |
+| `topActiveUsers[].id` | Long | 用户 ID |
+| `topActiveUsers[].username` | String | 用户名 |
+| `topActiveUsers[].avatar_url` | String | 头像 URL |
+| `topActiveUsers[].total` | Long | 发帖 + 评论总数 |
+
+**权限说明**：仅 `ADMIN` 角色可访问，非管理员返回 403。
+
+---
