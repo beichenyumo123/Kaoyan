@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.captcha.CaptchaUtil;
 import cn.hutool.captcha.ShearCaptcha;
 import cn.hutool.core.util.IdUtil;
+import com.zzu.kaoyan.common.annotation.RateLimit;
 import com.zzu.kaoyan.common.entity.User;
 import com.zzu.kaoyan.common.exception.BusinessException;
 import com.zzu.kaoyan.common.result.Result;
@@ -37,6 +38,7 @@ public class AuthController {
 
     @Operation(summary = "获取图形验证码", description = "生成4位验证码图片，返回 base64 和 uuid")
     @GetMapping("/captcha")
+    @RateLimit(time = 60, maxCount = 10, message = "验证码请求过于频繁，请稍后再试")
     public Result<Map<String, String>> getCaptcha() {
         ShearCaptcha captcha = CaptchaUtil.createShearCaptcha(150, 50, 4, 4);
 
@@ -54,22 +56,17 @@ public class AuthController {
     @Operation(summary = "用户注册", description = "接收用户注册信息，密码将在后端加密存储")
     @PostMapping("/register")
     public Result<Void> register(@Validated @RequestBody RegisterDTO registerDTO) {
+        validateCaptcha(registerDTO.getCaptchaCode(), registerDTO.getCaptchaUuid());
 
         authService.register(registerDTO);
 
         return Result.success();
     }
 
-    @Operation(summary = "用户登录", description = "支持邮箱/手机号+验证码登录，返回JWT Token")
+    @Operation(summary = "用户登录", description = "支持邮箱/手机号+密码登录，返回JWT Token")
     @PostMapping("/login")
     public Result<LoginVO> login(@Validated @RequestBody LoginDTO loginDTO){
-        // 验证码校验
-        String redisKey = "captcha:" + loginDTO.getCaptchaUuid();
-        String redisCode = stringRedisTemplate.opsForValue().get(redisKey);
-        if (redisCode == null || !redisCode.equalsIgnoreCase(loginDTO.getCaptchaCode())) {
-            throw new BusinessException(400, "验证码错误或已过期");
-        }
-        stringRedisTemplate.delete(redisKey);
+        validateCaptcha(loginDTO.getCaptchaCode(), loginDTO.getCaptchaUuid());
 
         User user = authService.verifyAccountAndPassword(loginDTO.getAccount(), loginDTO.getPassword());
 
@@ -94,5 +91,17 @@ public class AuthController {
     public Result<Void> logout() {
         StpUtil.logout();
         return Result.success();
+    }
+
+    /**
+     * 校验图形验证码，校验通过后删除 Redis 中的验证码（一次性使用）
+     */
+    private void validateCaptcha(String captchaCode, String captchaUuid) {
+        String redisKey = "captcha:" + captchaUuid;
+        String redisCode = stringRedisTemplate.opsForValue().get(redisKey);
+        if (redisCode == null || !redisCode.equalsIgnoreCase(captchaCode)) {
+            throw new BusinessException(400, "验证码错误或已过期");
+        }
+        stringRedisTemplate.delete(redisKey);
     }
 }
