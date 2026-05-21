@@ -25,6 +25,10 @@ public class SaTokenConfig implements WebMvcConfigurer {
                                     "/api/auth/register",
                                     "/api/auth/captcha",
                                     "/api/boards",
+                                    "/api/experience/posts",
+                                    "/api/experience/posts/*",
+                                    "/api/experience/posts/search",
+                                    "/api/experience/users/*/posts",
                                     "/swagger-ui/**",
                                     "/api-docs/**",
                                     "/doc.html"

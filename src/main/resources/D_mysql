@@ -1,0 +1,151 @@
+
+
+-- ============================================================
+-- D. 上岸认证 + 可信经验数据库 — 数据库变更脚本
+-- 执行前请确认当前数据库名称
+-- ============================================================
+
+-- -----------------------------------------------------------
+-- 1. sys_user 表新增 is_verified 字段
+-- -----------------------------------------------------------
+ALTER TABLE sys_user ADD COLUMN is_verified TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否通过上岸认证: 0=未认证, 1=已认证';
+
+-- -----------------------------------------------------------
+-- 2. 上岸认证记录表
+-- -----------------------------------------------------------
+DROP TABLE IF EXISTS user_verification;
+CREATE TABLE user_verification (
+    id              BIGINT          NOT NULL AUTO_INCREMENT  COMMENT '主键',
+    user_id         BIGINT          NOT NULL                 COMMENT '用户ID，关联 sys_user.id',
+    real_name       VARCHAR(50)     NOT NULL                 COMMENT '真实姓名',
+    target_school   VARCHAR(100)    NOT NULL                 COMMENT '录取院校',
+    target_major    VARCHAR(100)    NOT NULL                 COMMENT '录取专业',
+    admission_year  INT             NOT NULL                 COMMENT '入学年份',
+    admission_letter_url  VARCHAR(500)  NOT NULL             COMMENT '录取通知书图片URL（/uploads/...）',
+    xuexin_screenshot_url VARCHAR(500) NOT NULL             COMMENT '学信网截图URL（/uploads/...）',
+    status          TINYINT         NOT NULL DEFAULT 0       COMMENT '审核状态: 0=待审核, 1=已通过, 2=已驳回',
+    reviewer_id     BIGINT          DEFAULT NULL             COMMENT '审核人ID，关联 sys_user.id',
+    review_comment  VARCHAR(500)    DEFAULT NULL             COMMENT '审核意见',
+    reviewed_at     DATETIME        DEFAULT NULL             COMMENT '审核时间',
+    is_deleted      TINYINT(1)      NOT NULL DEFAULT 0       COMMENT '逻辑删除',
+    created_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '申请时间',
+    updated_at      DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_id (user_id),
+    KEY idx_status (status),
+    KEY idx_target_school (target_school),
+    KEY idx_target_major (target_major)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='上岸认证记录表';
+
+-- -----------------------------------------------------------
+-- 3. 结构化经验贴表
+-- -----------------------------------------------------------
+DROP TABLE IF EXISTS experience_post;
+CREATE TABLE experience_post (
+    id                  BIGINT          NOT NULL AUTO_INCREMENT  COMMENT '主键',
+    user_id             BIGINT          NOT NULL                 COMMENT '作者ID，关联 sys_user.id',
+    forum_post_id       BIGINT          DEFAULT NULL             COMMENT '关联论坛帖子ID（null=独立经验贴）',
+    undergrad_school    VARCHAR(100)    NOT NULL                 COMMENT '本科院校',
+    undergrad_major     VARCHAR(100)    NOT NULL                 COMMENT '本科专业',
+    is_cross_major      TINYINT(1)      NOT NULL DEFAULT 0       COMMENT '是否跨考: 0=否, 1=是',
+    is_second_attempt   TINYINT(1)      NOT NULL DEFAULT 0       COMMENT '是否二战: 0=否, 1=是',
+    target_school       VARCHAR(100)    NOT NULL                 COMMENT '目标院校',
+    target_major        VARCHAR(100)    NOT NULL                 COMMENT '目标专业',
+    initial_exam_total  DECIMAL(5,1)    DEFAULT NULL             COMMENT '初试总分',
+    initial_exam_politics DECIMAL(4,1)  DEFAULT NULL             COMMENT '政治',
+    initial_exam_english  DECIMAL(4,1)  DEFAULT NULL             COMMENT '英语',
+    initial_exam_math     DECIMAL(4,1)  DEFAULT NULL             COMMENT '数学',
+    initial_exam_major    DECIMAL(4,1)  DEFAULT NULL             COMMENT '专业课',
+    re_exam_score       DECIMAL(5,1)    DEFAULT NULL             COMMENT '复试分',
+    timeline_json       JSON            DEFAULT NULL             COMMENT '备考时间线 [{"phase":"基础","start":"3月","end":"6月","desc":"..."}]',
+    books_json          JSON            DEFAULT NULL             COMMENT '用书推荐 [{"subject":"数学","name":"复习全书","rating":5}]',
+    tips                TEXT            DEFAULT NULL             COMMENT '备考心得/建议',
+    is_verified         TINYINT(1)      NOT NULL DEFAULT 0       COMMENT '发布时作者是否已认证（快照）',
+    status              TINYINT         NOT NULL DEFAULT 1       COMMENT '状态: 0=草稿, 1=已发布',
+    view_count          INT             NOT NULL DEFAULT 0       COMMENT '浏览数',
+    like_count          INT             NOT NULL DEFAULT 0       COMMENT '点赞数',
+    collect_count       INT             NOT NULL DEFAULT 0       COMMENT '收藏数',
+    is_deleted          TINYINT(1)      NOT NULL DEFAULT 0       COMMENT '逻辑删除',
+    created_at          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发布时间',
+    updated_at          DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_user_id (user_id),
+    KEY idx_forum_post_id (forum_post_id),
+    KEY idx_target_school_major (target_school, target_major),
+    KEY idx_undergrad_school (undergrad_school),
+    KEY idx_is_verified (is_verified),
+    KEY idx_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='结构化经验贴表';
+
+-- -----------------------------------------------------------
+-- 4. 经验贴点赞表
+-- -----------------------------------------------------------
+DROP TABLE IF EXISTS experience_post_like;
+CREATE TABLE experience_post_like (
+    id              BIGINT      NOT NULL AUTO_INCREMENT  COMMENT '主键',
+    experience_id   BIGINT      NOT NULL                 COMMENT '经验贴ID',
+    user_id         BIGINT      NOT NULL                 COMMENT '点赞用户ID',
+    created_at      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '点赞时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_experience_user (experience_id, user_id),
+    KEY idx_experience_id (experience_id),
+    KEY idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='经验贴点赞表';
+
+-- -----------------------------------------------------------
+-- 5. 经验贴收藏表
+-- -----------------------------------------------------------
+DROP TABLE IF EXISTS experience_post_collect;
+CREATE TABLE experience_post_collect (
+    id              BIGINT      NOT NULL AUTO_INCREMENT  COMMENT '主键',
+    experience_id   BIGINT      NOT NULL                 COMMENT '经验贴ID',
+    user_id         BIGINT      NOT NULL                 COMMENT '收藏用户ID',
+    created_at      DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '收藏时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_experience_user (experience_id, user_id),
+    KEY idx_experience_id (experience_id),
+    KEY idx_user_id (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='经验贴收藏表';
+
+-- -----------------------------------------------------------
+-- 6. 经验贴评论数触发器（点赞/收藏更新 like_count / collect_count）
+-- -----------------------------------------------------------
+
+-- 经验贴点赞后更新 like_count
+DROP TRIGGER IF EXISTS trg_experience_like_insert;
+CREATE TRIGGER trg_experience_like_insert
+AFTER INSERT ON experience_post_like
+FOR EACH ROW
+BEGIN
+    UPDATE experience_post SET like_count = like_count + 1 WHERE id = NEW.experience_id;
+END;
+
+DROP TRIGGER IF EXISTS trg_experience_like_delete;
+CREATE TRIGGER trg_experience_like_delete
+AFTER DELETE ON experience_post_like
+FOR EACH ROW
+BEGIN
+    UPDATE experience_post SET like_count = like_count - 1 WHERE id = OLD.experience_id;
+END;
+
+-- 经验贴收藏后更新 collect_count
+DROP TRIGGER IF EXISTS trg_experience_collect_insert;
+CREATE TRIGGER trg_experience_collect_insert
+AFTER INSERT ON experience_post_collect
+FOR EACH ROW
+BEGIN
+    UPDATE experience_post SET collect_count = collect_count + 1 WHERE id = NEW.experience_id;
+END;
+
+DROP TRIGGER IF EXISTS trg_experience_collect_delete;
+CREATE TRIGGER trg_experience_collect_delete
+AFTER DELETE ON experience_post_collect
+FOR EACH ROW
+BEGIN
+    UPDATE experience_post SET collect_count = collect_count - 1 WHERE id = OLD.experience_id;
+END;
+
+-- -----------------------------------------------------------
+-- 7. 用户统计表新增经验贴数字段
+-- -----------------------------------------------------------
+ALTER TABLE sys_user_stats ADD COLUMN experience_count INT NOT NULL DEFAULT 0 COMMENT '经验贴数';

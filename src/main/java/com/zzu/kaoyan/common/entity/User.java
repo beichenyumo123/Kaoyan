@@ -20,6 +20,7 @@ public class User {
     private String avatarUrl;
     private String targetMajor;
     private Integer points;
+    private Boolean isVerified;
 
     @TableField("is_deleted")
     @TableLogic

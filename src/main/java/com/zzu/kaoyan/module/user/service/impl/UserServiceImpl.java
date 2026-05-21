@@ -6,6 +6,8 @@ import com.zzu.kaoyan.common.entity.User;
 import com.zzu.kaoyan.common.exception.BusinessException;
 import com.zzu.kaoyan.common.result.ResultCode;
 import com.zzu.kaoyan.mapper.UserMapper;
+import com.zzu.kaoyan.module.certification.entity.UserVerification;
+import com.zzu.kaoyan.module.certification.mapper.UserVerificationMapper;
 import com.zzu.kaoyan.module.user.dto.UserUpdateDTO;
 import com.zzu.kaoyan.module.user.dto.UserVO;
 import com.zzu.kaoyan.module.user.service.UserService;
@@ -16,9 +18,11 @@ import org.springframework.stereotype.Service;
 public class UserServiceImpl implements UserService {
 
     private final UserMapper userMapper;
+    private final UserVerificationMapper userVerificationMapper;
 
-    public UserServiceImpl(UserMapper userMapper) {
+    public UserServiceImpl(UserMapper userMapper, UserVerificationMapper userVerificationMapper) {
         this.userMapper = userMapper;
+        this.userVerificationMapper = userVerificationMapper;
     }
 
     @Override
@@ -34,6 +38,19 @@ public class UserServiceImpl implements UserService {
         // 3. 转换为 VO（不包含密码、deleted等敏感字段）
         UserVO vo = new UserVO();
         BeanUtils.copyProperties(user, vo);  // 同名属性自动复制
+
+        // 4. 查询认证信息，填充 verifiedSchool / verifiedMajor
+        if (Boolean.TRUE.equals(user.getIsVerified())) {
+            UserVerification verification = userVerificationMapper.selectOne(
+                    Wrappers.<UserVerification>lambdaQuery()
+                            .eq(UserVerification::getUserId, userId)
+                            .eq(UserVerification::getStatus, 1)
+            );
+            if (verification != null) {
+                vo.setVerifiedSchool(verification.getTargetSchool());
+                vo.setVerifiedMajor(verification.getTargetMajor());
+            }
+        }
 
         return vo;
     }

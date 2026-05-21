@@ -30,4 +30,13 @@ public class UserVO {
 
     @Schema(description = "总积分", example = "250")
     private Integer points;
+
+    @Schema(description = "是否通过上岸认证", example = "true")
+    private Boolean isVerified;
+
+    @Schema(description = "认证录取院校（认证通过后可见）", example = "清华大学")
+    private String verifiedSchool;
+
+    @Schema(description = "认证录取专业（认证通过后可见）", example = "计算机技术")
+    private String verifiedMajor;
 }
