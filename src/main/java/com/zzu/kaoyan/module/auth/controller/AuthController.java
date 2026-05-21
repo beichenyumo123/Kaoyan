@@ -60,16 +60,17 @@ public class AuthController {
         return Result.success();
     }
 
-    @Operation(summary = "用户登录", description = "支持邮箱/手机号+验证码登录，返回JWT Token")
+    @Operation(summary = "用户登录", description = "支持邮箱/手机号+密码登录，返回JWT Token")
     @PostMapping("/login")
     public Result<LoginVO> login(@Validated @RequestBody LoginDTO loginDTO){
+        // TODO: 临时禁用验证码校验（需要Redis服务），生产环境请恢复
         // 验证码校验
-        String redisKey = "captcha:" + loginDTO.getCaptchaUuid();
-        String redisCode = stringRedisTemplate.opsForValue().get(redisKey);
-        if (redisCode == null || !redisCode.equalsIgnoreCase(loginDTO.getCaptchaCode())) {
-            throw new BusinessException(400, "验证码错误或已过期");
-        }
-        stringRedisTemplate.delete(redisKey);
+        // String redisKey = "captcha:" + loginDTO.getCaptchaUuid();
+        // String redisCode = stringRedisTemplate.opsForValue().get(redisKey);
+        // if (redisCode == null || !redisCode.equalsIgnoreCase(loginDTO.getCaptchaCode())) {
+        //     throw new BusinessException(400, "验证码错误或已过期");
+        // }
+        // stringRedisTemplate.delete(redisKey);
 
         User user = authService.verifyAccountAndPassword(loginDTO.getAccount(), loginDTO.getPassword());
 
