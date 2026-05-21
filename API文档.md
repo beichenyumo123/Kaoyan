@@ -521,3 +521,147 @@ POST /api/upload/video
 > 文件访问 URL = `http://localhost:8081` + 返回的 `url` 路径。存储路径按 `uploads/{images,videos}/{yyyyMM}/{uuid}.{ext}` 组织。
 
 ---
+
+## 7. AI 多智能体学习伴侣（2026-05-20 新增）
+
+### 7.1 获取今日 AI 任务
+
+```
+GET /api/ai/tasks
+```
+
+**需登录**。
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "data": [
+    {
+      "id": 1,
+      "userId": 8,
+      "taskDate": "2026-05-20",
+      "taskContent": "完成 2023 年数学一真题选择题部分",
+      "importance": "HIGH",
+      "status": 0,
+      "agentTips": "注意控制时间在 50 分钟以内",
+      "createdAt": "2026-05-20T09:30:00"
+    }
+  ]
+}
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `status` | 0=未完成, 1=已完成 |
+| `importance` | HIGH / MEDIUM / LOW |
+| `agentTips` | PlannerAgent 给出的备考叮嘱 |
+
+---
+
+### 7.2 完成任务
+
+```
+POST /api/ai/tasks/{taskId}/complete
+```
+
+**需登录**。完成后自动发布 `TaskCompletedEvent`，供后续 Agent 迭代使用。
+
+---
+
+### 7.3 获取未读干预日志
+
+```
+GET /api/ai/interventions
+```
+
+**需登录**。
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "data": [
+    {
+      "id": 1,
+      "userId": 8,
+      "agentName": "Psychology",
+      "triggerReason": "打卡感言分析（连续7天）",
+      "interventionContent": "我能感受到你今天的疲惫...",
+      "userReaction": "UNREAD",
+      "createdAt": "2026-05-20T09:31:00"
+    }
+  ]
+}
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `agentName` | Psychology / Supervisor / Review |
+| `userReaction` | UNREAD=未读, READ=已读 |
+
+---
+
+### 7.4 标记干预日志已读
+
+```
+PUT /api/ai/interventions/{id}/read
+```
+
+**需登录**。将 `userReaction` 更新为 `READ`。
+
+---
+
+### 7.5 获取周学情透视报告
+
+```
+GET /api/ai/report
+```
+
+**需登录**。
+
+**响应示例**：
+
+```json
+{
+  "code": 200,
+  "data": {
+    "markdown": "# 📊 周学情透视报告\n\n## 📅 本周概览\n..."
+  }
+}
+```
+
+`markdown` 为 ReviewAgent 生成的完整 Markdown 文本，前端可用 Markdown 渲染组件展示。
+
+---
+
+### 7.6 手动触发监督 Agent（路演）
+
+```
+POST /api/ai/agent/supervisor/trigger
+```
+
+**需登录**。立即触发 SupervisorAgent 扫描近 3 天任务完成率低于 50% 的用户并生成严厉警告。
+
+---
+
+### 事件驱动架构概述
+
+```
+用户打卡
+  → UserCheckInEvent
+    → PlannerListener (@Async)    → PlannerAgent     → ai_daily_task
+    → PsychologyListener (@Async) → PsychologyAgent  → ai_intervention_log
+
+@Scheduled 每晚 21:00
+  → SupervisorAgent 扫描低完成率用户 → ai_intervention_log
+
+GET /api/ai/report
+  → ReviewAgent 聚合 7 天数据 → Markdown 周报
+```
+
+> LLM API 使用 DeepSeek（兼容 OpenAI），配置项 `ai.api.*`。所有 Agent 调用均有 try-catch 保护，单个 Agent 异常不影响其他 Agent。
+
+---
