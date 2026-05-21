@@ -6,6 +6,9 @@ import com.zzu.kaoyan.module.ai.config.AiApiProperties;
 import com.zzu.kaoyan.module.ai.service.AiAgentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
@@ -37,8 +40,14 @@ public class AiAgentServiceImpl implements AiAgentService {
 
         try {
             Map<String, Object> requestBody = buildRequestBody(systemPrompt, userMessage);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(apiProperties.getKey());
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
             String response = aiRestTemplate.postForObject(
-                    apiProperties.getEndpoint(), requestBody, String.class);
+                    apiProperties.getEndpoint(), entity, String.class);
 
             if (response == null) {
                 log.error("AI API 返回 null");
