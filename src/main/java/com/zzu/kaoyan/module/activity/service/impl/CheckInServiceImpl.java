@@ -12,19 +12,30 @@ import com.zzu.kaoyan.module.activity.mapper.CheckInMapper;
 import com.zzu.kaoyan.module.activity.mapper.PointsLogMapper;
 import com.zzu.kaoyan.module.activity.mapper.UserStudyMapper;
 import com.zzu.kaoyan.module.activity.service.CheckInService;
-import lombok.RequiredArgsConstructor;
+import com.zzu.kaoyan.module.ai.event.UserCheckInEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 
 @Service
-@RequiredArgsConstructor
 public class CheckInServiceImpl implements CheckInService {
 
     private final CheckInMapper checkInMapper;
     private final UserStudyMapper userStudyMapper;
     private final PointsLogMapper pointsLogMapper;
     private final UserMapper userMapper;
+    private final ApplicationEventPublisher eventPublisher;
+
+    public CheckInServiceImpl(CheckInMapper checkInMapper, UserStudyMapper userStudyMapper,
+                               PointsLogMapper pointsLogMapper, UserMapper userMapper,
+                               ApplicationEventPublisher eventPublisher) {
+        this.checkInMapper = checkInMapper;
+        this.userStudyMapper = userStudyMapper;
+        this.pointsLogMapper = pointsLogMapper;
+        this.userMapper = userMapper;
+        this.eventPublisher = eventPublisher;
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -63,6 +74,12 @@ public class CheckInServiceImpl implements CheckInService {
         vo.setPoints(points);
         vo.setTotalPoints(userMapper.getPointsById(userId));
         vo.setTotalCheckDays(study == null ? 1 : study.getTotalCheckDays() + 1);
+
+        // 异步发布打卡事件，触发多智能体（Planner / Psychology / Supervisor）
+        eventPublisher.publishEvent(new UserCheckInEvent(
+                userId, continuousDays, vo.getTotalCheckDays(),
+                dto.getStudyHours(), dto.getNotes()));
+
         return vo;
     }
 

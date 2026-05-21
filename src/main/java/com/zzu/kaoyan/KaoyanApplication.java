@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 //@ComponentScan(basePackages = "com.zzu.kaoyan",
 //		excludeFilters = @ComponentScan.Filter(
@@ -15,7 +16,7 @@ import org.springframework.context.annotation.FilterType;
 //)
 @SpringBootApplication
 @MapperScan("com.zzu.kaoyan.**.mapper")
-//@MapperScan({"com.zzu.kaoyan.mapper", "com.zzu.kaoyan.module.*.mapper"})
+@EnableAsync
 public class KaoyanApplication {
 
 	public static void main(String[] args) {
