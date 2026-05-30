@@ -23,7 +23,7 @@ import java.util.List;
  * AI 面试报告 - Mock 实现（用于开发/测试阶段）
  * <p>
  * 当 application.properties 中设置 interview.ai.mock=true 时自动启用。
- * 返回一份固定结构的模拟报告，不调用 DeepSeek API。
+ * 返回一份固定结构的模拟报告，不调用 AI API。
  */
 @Slf4j
 @Service
@@ -38,7 +38,7 @@ public class InterviewReportServiceMockImpl implements InterviewReportService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public ReportVO generateFinalReport(Long sessionId) {
+    public ReportVO generateFinalReport(Long sessionId, java.util.Map<String, Object> demeanorSummary) {
         InterviewSession session = sessionMapper.selectById(sessionId);
         if (session == null) {
             throw new BusinessException(404, "面试会话不存在");

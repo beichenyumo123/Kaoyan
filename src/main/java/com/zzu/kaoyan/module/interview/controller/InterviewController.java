@@ -100,7 +100,8 @@ public class InterviewController {
     public Result<InterviewRecord> nextQuestion(
             @Parameter(description = "会话ID") @PathVariable Long sessionId,
             @RequestBody NextQuestionDTO dto) {
-        InterviewRecord aiRecord = interviewAiService.generateNextQuestion(sessionId, dto.getAnswer());
+        InterviewRecord aiRecord = interviewAiService.generateNextQuestion(
+                sessionId, dto.getAnswer(), dto.getSpeechDuration(), dto.getDemeanor());
         return Result.success(aiRecord);
     }
 
@@ -114,8 +115,10 @@ public class InterviewController {
     @PostMapping("/session/{sessionId}/finish")
     @Operation(summary = "结束面试并生成报告")
     public Result<ReportVO> finishInterview(
-            @Parameter(description = "会话ID") @PathVariable Long sessionId) {
-        ReportVO report = interviewReportService.generateFinalReport(sessionId);
+            @Parameter(description = "会话ID") @PathVariable Long sessionId,
+            @RequestBody(required = false) FinishDTO dto) {
+        java.util.Map<String, Object> demeanorSummary = dto != null ? dto.getDemeanorSummary() : null;
+        ReportVO report = interviewReportService.generateFinalReport(sessionId, demeanorSummary);
         return Result.success(report);
     }
 
@@ -149,5 +152,15 @@ public class InterviewController {
     @lombok.Data
     public static class NextQuestionDTO {
         private String answer;
+        /** 语音回答的实际时长（秒），文字模式为 null */
+        private Double speechDuration;
+        /** 视频模式的仪态快照，非视频模式为 null */
+        private java.util.Map<String, Object> demeanor;
+    }
+
+    @lombok.Data
+    public static class FinishDTO {
+        /** 视频模式下的仪态汇总数据，非视频模式为 null */
+        private java.util.Map<String, Object> demeanorSummary;
     }
 }

@@ -50,7 +50,8 @@ public class InterviewAiServiceMockImpl implements InterviewAiService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public InterviewRecord generateNextQuestion(Long sessionId, String userLatestAnswer) {
+    public InterviewRecord generateNextQuestion(Long sessionId, String userLatestAnswer,
+                                                 Double speechDuration, java.util.Map<String, Object> demeanor) {
         InterviewSession session = sessionMapper.selectById(sessionId);
         if (session == null) {
             throw new com.zzu.kaoyan.common.exception.BusinessException(404, "面试会话不存在");
@@ -64,6 +65,8 @@ public class InterviewAiServiceMockImpl implements InterviewAiService {
         userRecord.setSessionId(sessionId);
         userRecord.setRole("user");
         userRecord.setContent(userLatestAnswer);
+        userRecord.setFluencyScore(speechDuration != null && speechDuration > 0
+                ? java.math.BigDecimal.valueOf(80) : null);
         userRecord.setCreatedAt(LocalDateTime.now());
         recordMapper.insert(userRecord);
 
