@@ -7,7 +7,11 @@ public enum ResultCode {
     FORBIDDEN(403, "无权限访问"),
     NOT_FOUND(404, "资源不存在"),
     RATE_LIMITED(429, "请求过于频繁，请稍后再试"),
-    SYSTEM_ERROR(500, "服务器异常");
+    SYSTEM_ERROR(500, "服务器异常"),
+    ALREADY_VERIFIED(400, "你已提交过认证申请"),
+    VERIFICATION_PENDING(400, "你已有待审核的认证申请"),
+    NOT_VERIFIED(400, "你尚未通过上岸认证，通过认证后才能发布经验贴");
+
 
     private final Integer code;
     private final String message;
