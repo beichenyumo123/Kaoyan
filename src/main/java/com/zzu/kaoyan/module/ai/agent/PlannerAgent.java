@@ -6,6 +6,7 @@ import com.zzu.kaoyan.module.ai.entity.UserAiProfile;
 import com.zzu.kaoyan.module.ai.mapper.AiDailyTaskMapper;
 import com.zzu.kaoyan.module.ai.mapper.UserAiProfileMapper;
 import com.zzu.kaoyan.module.ai.service.AiAgentService;
+import com.zzu.kaoyan.module.ai.service.UserAiProfileService;
 import com.zzu.kaoyan.module.ai.util.JsonArrayExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,12 +34,14 @@ public class PlannerAgent {
     private final AiAgentService aiAgentService;
     private final AiDailyTaskMapper taskMapper;
     private final UserAiProfileMapper profileMapper;
+    private final UserAiProfileService profileService;
 
     public PlannerAgent(AiAgentService aiAgentService, AiDailyTaskMapper taskMapper,
-                        UserAiProfileMapper profileMapper) {
+                        UserAiProfileMapper profileMapper, UserAiProfileService profileService) {
         this.aiAgentService = aiAgentService;
         this.taskMapper = taskMapper;
         this.profileMapper = profileMapper;
+        this.profileService = profileService;
     }
 
     public void planForUser(Long userId, int continuousDays, int totalCheckDays, int studyHours) {
@@ -76,5 +79,8 @@ public class PlannerAgent {
         }
 
         log.info("PlannerAgent 写入 {} 条任务 — userId={}", tasks.size(), userId);
+
+        // 更新用户认知画像
+        profileService.updateCognitiveProfile(userId, continuousDays, totalCheckDays, studyHours);
     }
 }

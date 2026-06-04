@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.zzu.kaoyan.module.ai.mapper.KnowledgePointMapper">
+
+    <!--
+        RAG 检索：对每个搜索词用 OR 拼接 LIKE 条件，匹配标题/关键词/内容。
+        用匹配到的字段数做简单相关性排序。
+    -->
+    <select id="searchByKeywords" resultType="com.zzu.kaoyan.module.ai.entity.KnowledgePoint">
+        SELECT id, subject, chapter, title, content, keywords, importance, created_at
+        FROM ai_knowledge_point
+        <where>
+            <if test="subject != null and subject != ''">
+                AND subject = #{subject}
+            </if>
+            <if test="keywords != null and keywords.size() > 0">
+                AND (
+                <foreach collection="keywords" item="kw" separator=" OR ">
+                    title LIKE CONCAT('%', #{kw}, '%')
+                    OR keywords LIKE CONCAT('%', #{kw}, '%')
+                    OR content LIKE CONCAT('%', #{kw}, '%')
+                </foreach>
+                )
+            </if>
+        </where>
+        ORDER BY
+            CASE WHEN importance = 'HIGH' THEN 0 WHEN importance = 'MEDIUM' THEN 1 ELSE 2 END,
+            id ASC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

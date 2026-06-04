@@ -3,6 +3,7 @@ package com.zzu.kaoyan.module.ai.agent;
 import com.zzu.kaoyan.module.ai.entity.AiInterventionLog;
 import com.zzu.kaoyan.module.ai.mapper.AiInterventionLogMapper;
 import com.zzu.kaoyan.module.ai.service.AiAgentService;
+import com.zzu.kaoyan.module.ai.service.UserAiProfileService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -28,10 +29,13 @@ public class PsychologyAgent {
 
     private final AiAgentService aiAgentService;
     private final AiInterventionLogMapper interventionMapper;
+    private final UserAiProfileService profileService;
 
-    public PsychologyAgent(AiAgentService aiAgentService, AiInterventionLogMapper interventionMapper) {
+    public PsychologyAgent(AiAgentService aiAgentService, AiInterventionLogMapper interventionMapper,
+                           UserAiProfileService profileService) {
         this.aiAgentService = aiAgentService;
         this.interventionMapper = interventionMapper;
+        this.profileService = profileService;
     }
 
     public void analyzeAndIntervene(Long userId, String notes, String triggerReason) {
@@ -55,5 +59,23 @@ public class PsychologyAgent {
         interventionMapper.insert(logEntity);
 
         log.info("PsychologyAgent 已写入干预日志 — userId={}", userId);
+
+        // 更新用户心理画像
+        String emotionLabel = detectEmotionLabel(notes);
+        profileService.updatePsychologicalProfile(userId, emotionLabel, response.trim());
+    }
+
+    /**
+     * 简单的情绪标签检测（基于关键词匹配）。
+     */
+    private String detectEmotionLabel(String notes) {
+        if (notes == null) return "未知";
+        String lower = notes.toLowerCase();
+        if (lower.contains("焦虑") || lower.contains("紧张") || lower.contains("担心")) return "焦虑";
+        if (lower.contains("绝望") || lower.contains("崩溃") || lower.contains("放弃")) return "绝望";
+        if (lower.contains("疲惫") || lower.contains("累") || lower.contains("困")) return "疲惫";
+        if (lower.contains("开心") || lower.contains("进步") || lower.contains("满意")) return "积极";
+        if (lower.contains("迷茫") || lower.contains("困惑") || lower.contains("不知道")) return "迷茫";
+        return "一般";
     }
 }

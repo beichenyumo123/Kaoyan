@@ -88,8 +88,8 @@ public class SupervisorAgent {
 
                 if (rate >= 0.5) continue;
 
-                log.info("SupervisorAgent 命中用户 — userId={}, 完成率={:.0%}, 总任务={}",
-                        userId, rate, userTasks.size());
+                log.info("SupervisorAgent 命中用户 — userId={}, 完成率={}%, 总任务={}",
+                        userId, Math.round(rate * 100), userTasks.size());
 
                 String warning = aiAgentService.chat(SYSTEM_PROMPT,
                         String.format("该考生近3天 %d 项任务仅完成 %d 项，完成率 %.0f%%。",
