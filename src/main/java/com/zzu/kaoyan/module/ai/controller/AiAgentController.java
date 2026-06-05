@@ -15,6 +15,8 @@ import com.zzu.kaoyan.module.ai.entity.*;
 import com.zzu.kaoyan.module.ai.event.TaskCompletedEvent;
 import com.zzu.kaoyan.module.ai.mapper.*;
 import com.zzu.kaoyan.module.ai.vo.AiSummaryVO;
+import com.zzu.kaoyan.module.ai.vo.ChatMessageVO;
+import com.zzu.kaoyan.module.ai.vo.ChatSessionVO;
 import com.zzu.kaoyan.module.ai.vo.RecommendationVO;
 import com.zzu.kaoyan.module.ai.vo.ReportHistoryVO;
 import com.zzu.kaoyan.module.activity.entity.po.UserStudyPO;
@@ -49,6 +51,8 @@ public class AiAgentController {
     private final AiKnowledgePointMapper knowledgePointMapper;
     private final AiReportMapper reportMapper;
     private final AiUserEventMapper userEventMapper;
+    private final AiChatSessionMapper chatSessionMapper;
+    private final AiChatMessageMapper chatMessageMapper;
     private final UserAiProfileMapper userProfileMapper;
     private final UserStudyMapper userStudyMapper;
     private final ReviewAgent reviewAgent;
@@ -62,6 +66,8 @@ public class AiAgentController {
                              AiKnowledgePointMapper knowledgePointMapper,
                              AiReportMapper reportMapper,
                              AiUserEventMapper userEventMapper,
+                             AiChatSessionMapper chatSessionMapper,
+                             AiChatMessageMapper chatMessageMapper,
                              UserAiProfileMapper userProfileMapper,
                              UserStudyMapper userStudyMapper,
                              ReviewAgent reviewAgent,
@@ -74,6 +80,8 @@ public class AiAgentController {
         this.knowledgePointMapper = knowledgePointMapper;
         this.reportMapper = reportMapper;
         this.userEventMapper = userEventMapper;
+        this.chatSessionMapper = chatSessionMapper;
+        this.chatMessageMapper = chatMessageMapper;
         this.userProfileMapper = userProfileMapper;
         this.userStudyMapper = userStudyMapper;
         this.reviewAgent = reviewAgent;
@@ -180,11 +188,18 @@ public class AiAgentController {
         Long userId = StpUtil.getLoginIdAsLong();
         log.info("用户提问 — userId={}, question={}", userId, dto.getQuestion());
 
+        // 处理会话
+        SessionInfo sessionInfo = ensureSession(userId, dto.getSessionId(), dto.getQuestion());
+        saveMessage(sessionInfo.id, "user", dto.getQuestion());
+
         String answer = tutorAgent.answer(dto.getQuestion(), dto.getSubject());
+        saveMessage(sessionInfo.id, "assistant", answer);
 
         Map<String, String> data = new HashMap<>();
         data.put("answer", answer);
         data.put("question", dto.getQuestion());
+        data.put("sessionId", String.valueOf(sessionInfo.id));
+        data.put("sessionTitle", sessionInfo.title);
         return Result.success(data);
     }
 
@@ -213,10 +228,20 @@ public class AiAgentController {
         }
         log.info("用户流式提问 — userId={}, question={}", userId, dto.getQuestion());
 
+        // 处理会话（在同步线程中完成，避免异步上下文丢失）
+        SessionInfo sessionInfo = ensureSession(userId, dto.getSessionId(), dto.getQuestion());
+        saveMessage(sessionInfo.id, "user", dto.getQuestion());
+
         // 异步执行，不阻塞请求线程
         CompletableFuture.runAsync(() -> {
+            StringBuilder fullAnswer = new StringBuilder();
             try {
+                // 先发送会话元数据（sessionId + title），让前端立即知道标题
+                emitter.send(objectMapper.writeValueAsString(
+                        Map.of("type", "meta", "sessionId", sessionInfo.id, "title", sessionInfo.title)));
+
                 tutorAgent.answerStream(dto.getQuestion(), dto.getSubject(), chunk -> {
+                    fullAnswer.append(chunk);
                     try {
                         // 用 JSON 包裹 chunk，确保 \n 等特殊字符正确转义，不会破坏 SSE 协议格式
                         emitter.send(objectMapper.writeValueAsString(Map.of("content", chunk)));
@@ -224,9 +249,15 @@ public class AiAgentController {
                         log.warn("SSE 发送失败 — userId={}", userId, e);
                     }
                 });
+                // 流式完成后保存 AI 回复到数据库
+                saveMessage(sessionInfo.id, "assistant", fullAnswer.toString());
                 emitter.complete();
             } catch (Exception e) {
                 log.error("SSE 流式答疑失败 — userId={}", userId, e);
+                // 即使失败也保存已有的部分回复
+                if (fullAnswer.length() > 0) {
+                    saveMessage(sessionInfo.id, "assistant", fullAnswer.toString());
+                }
                 emitter.completeWithError(e);
             }
         });
@@ -316,9 +347,10 @@ public class AiAgentController {
         return Result.success();
     }
 
-    // ==================== 7. 对话历史管理 ====================
+    // ==================== 7. 对话历史管理（已废弃，请使用 /chat/sessions） ====================
 
-    @Operation(summary = "获取当前用户的 AI 对话历史")
+    @Deprecated
+    @Operation(summary = "获取当前用户的 AI 对话历史（已废弃，请使用 /chat/sessions）")
     @GetMapping("/chat/history")
     @SaCheckLogin
     public Result<List<Map<String, String>>> getChatHistory() {
@@ -327,12 +359,122 @@ public class AiAgentController {
         return Result.success(history);
     }
 
-    @Operation(summary = "清除当前用户的 AI 对话历史")
+    @Deprecated
+    @Operation(summary = "清除当前用户的 AI 对话历史（已废弃，请使用 DELETE /chat/sessions/{id}）")
     @DeleteMapping("/chat/history")
     @SaCheckLogin
     public Result<Void> clearChatHistory() {
         Long userId = StpUtil.getLoginIdAsLong();
         tutorAgent.clearHistory(userId);
+        return Result.success();
+    }
+
+    // ==================== 7.1 对话会话管理 ====================
+
+    @Operation(summary = "获取会话列表")
+    @GetMapping("/chat/sessions")
+    @SaCheckLogin
+    public Result<List<ChatSessionVO>> getChatSessions() {
+        Long userId = StpUtil.getLoginIdAsLong();
+        List<AiChatSession> sessions = chatSessionMapper.selectList(
+                new LambdaQueryWrapper<AiChatSession>()
+                        .eq(AiChatSession::getUserId, userId)
+                        .eq(AiChatSession::getIsDeleted, 0)
+                        .orderByDesc(AiChatSession::getUpdatedAt));
+
+        List<ChatSessionVO> voList = sessions.stream().map(s -> {
+            ChatSessionVO vo = new ChatSessionVO();
+            vo.setId(s.getId());
+            vo.setTitle(s.getTitle());
+            vo.setUpdatedAt(s.getUpdatedAt());
+
+            // 查询最后一条消息
+            AiChatMessage lastMsg = chatMessageMapper.selectOne(
+                    new LambdaQueryWrapper<AiChatMessage>()
+                            .eq(AiChatMessage::getSessionId, s.getId())
+                            .orderByDesc(AiChatMessage::getCreatedAt)
+                            .last("LIMIT 1"));
+            vo.setLastMessage(lastMsg != null ? lastMsg.getContent() : null);
+
+            // 查询消息总数
+            Long count = chatMessageMapper.selectCount(
+                    new LambdaQueryWrapper<AiChatMessage>()
+                            .eq(AiChatMessage::getSessionId, s.getId()));
+            vo.setMessageCount(count.intValue());
+
+            return vo;
+        }).collect(Collectors.toList());
+
+        return Result.success(voList);
+    }
+
+    @Operation(summary = "新建会话")
+    @PostMapping("/chat/sessions")
+    @SaCheckLogin
+    public Result<ChatSessionVO> createChatSession() {
+        Long userId = StpUtil.getLoginIdAsLong();
+        AiChatSession session = new AiChatSession();
+        session.setUserId(userId);
+        session.setTitle("新对话");
+        session.setIsDeleted(0);
+        session.setCreatedAt(LocalDateTime.now());
+        session.setUpdatedAt(LocalDateTime.now());
+        chatSessionMapper.insert(session);
+
+        ChatSessionVO vo = new ChatSessionVO();
+        vo.setId(session.getId());
+        vo.setTitle(session.getTitle());
+        vo.setUpdatedAt(session.getUpdatedAt());
+        vo.setMessageCount(0);
+        return Result.success(vo);
+    }
+
+    @Operation(summary = "获取某会话的消息列表")
+    @GetMapping("/chat/sessions/{id}/messages")
+    @SaCheckLogin
+    public Result<List<ChatMessageVO>> getChatMessages(@PathVariable Long id) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        AiChatSession session = chatSessionMapper.selectById(id);
+        if (session == null || !session.getUserId().equals(userId) || session.getIsDeleted() == 1) {
+            return Result.error(404, "会话不存在");
+        }
+
+        List<AiChatMessage> messages = chatMessageMapper.selectList(
+                new LambdaQueryWrapper<AiChatMessage>()
+                        .eq(AiChatMessage::getSessionId, id)
+                        .orderByAsc(AiChatMessage::getCreatedAt));
+
+        List<ChatMessageVO> voList = messages.stream().map(m -> {
+            ChatMessageVO vo = new ChatMessageVO();
+            vo.setRole(m.getRole());
+            vo.setContent(m.getContent());
+            vo.setCreatedAt(m.getCreatedAt());
+            return vo;
+        }).collect(Collectors.toList());
+
+        return Result.success(voList);
+    }
+
+    @Operation(summary = "删除会话（含消息）")
+    @DeleteMapping("/chat/sessions/{id}")
+    @SaCheckLogin
+    public Result<Void> deleteChatSession(@PathVariable Long id) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        AiChatSession session = chatSessionMapper.selectById(id);
+        if (session == null || !session.getUserId().equals(userId) || session.getIsDeleted() == 1) {
+            return Result.error(404, "会话不存在");
+        }
+
+        // 逻辑删除会话
+        session.setIsDeleted(1);
+        chatSessionMapper.updateById(session);
+
+        // 物理删除关联消息
+        chatMessageMapper.delete(
+                new LambdaQueryWrapper<AiChatMessage>()
+                        .eq(AiChatMessage::getSessionId, id));
+
+        log.info("删除会话 — userId={}, sessionId={}", userId, id);
         return Result.success();
     }
 
@@ -500,5 +642,48 @@ public class AiAgentController {
 
         vo.setKnowledgePoints(recommendations);
         return Result.success(vo);
+    }
+
+    // ==================== 辅助方法 ====================
+
+    private record SessionInfo(Long id, String title) {}
+
+    /**
+     * 确保会话存在：若 sessionId 为 null 则自动创建新会话，标题取用户问题前 20 字。
+     */
+    private SessionInfo ensureSession(Long userId, Long sessionId, String question) {
+        if (sessionId != null) {
+            AiChatSession existing = chatSessionMapper.selectById(sessionId);
+            if (existing != null && existing.getUserId().equals(userId) && existing.getIsDeleted() == 0) {
+                // 如果标题还是默认值，用第一条消息更新标题
+                if ("新对话".equals(existing.getTitle())) {
+                    existing.setTitle(question.length() > 20 ? question.substring(0, 20) : question);
+                }
+                existing.setUpdatedAt(LocalDateTime.now());
+                chatSessionMapper.updateById(existing);
+                return new SessionInfo(sessionId, existing.getTitle());
+            }
+        }
+        // 自动创建新会话
+        AiChatSession session = new AiChatSession();
+        session.setUserId(userId);
+        session.setTitle(question.length() > 20 ? question.substring(0, 20) : question);
+        session.setIsDeleted(0);
+        session.setCreatedAt(LocalDateTime.now());
+        session.setUpdatedAt(LocalDateTime.now());
+        chatSessionMapper.insert(session);
+        return new SessionInfo(session.getId(), session.getTitle());
+    }
+
+    /**
+     * 保存一条消息到数据库。
+     */
+    private void saveMessage(Long sessionId, String role, String content) {
+        AiChatMessage msg = new AiChatMessage();
+        msg.setSessionId(sessionId);
+        msg.setRole(role);
+        msg.setContent(content);
+        msg.setCreatedAt(LocalDateTime.now());
+        chatMessageMapper.insert(msg);
     }
 }

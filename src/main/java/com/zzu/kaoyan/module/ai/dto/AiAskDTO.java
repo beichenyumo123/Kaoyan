@@ -17,4 +17,7 @@ public class AiAskDTO {
 
     @Schema(description = "限定学科（可选，为空则全学科检索）", example = "数据结构")
     private String subject;
+
+    @Schema(description = "会话ID（可选，为空则自动创建新会话）")
+    private Long sessionId;
 }
