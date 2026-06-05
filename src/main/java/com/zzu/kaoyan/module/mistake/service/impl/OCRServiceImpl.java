@@ -77,8 +77,10 @@ public class OCRServiceImpl implements OCRService {
             throw new RuntimeException("图片文件不存在: " + fullImagePath);
         }
 
+        // 优先使用虚拟环境 Python，回退到系统 python
+        String pythonCmd = System.getenv().getOrDefault("OCR_PYTHON_CMD", "python");
         ProcessBuilder pb = new ProcessBuilder(
-                "python", scriptPath.toString(), fullImagePath.toString()
+                pythonCmd, scriptPath.toString(), fullImagePath.toString()
         );
         pb.redirectErrorStream(true);
         Process process = pb.start();
