@@ -53,14 +53,25 @@ public class AuthController {
         return Result.success(result);
     }
 
-    @Operation(summary = "用户注册", description = "接收用户注册信息，密码将在后端加密存储")
+    @Operation(summary = "用户注册", description = "接收用户注册信息，密码将在后端加密存储，注册成功后自动登录并返回Token")
     @PostMapping("/register")
-    public Result<Void> register(@Validated @RequestBody RegisterDTO registerDTO) {
+    public Result<LoginVO> register(@Validated @RequestBody RegisterDTO registerDTO) {
         validateCaptcha(registerDTO.getCaptchaCode(), registerDTO.getCaptchaUuid());
 
-        authService.register(registerDTO);
+        User user = authService.register(registerDTO);
 
-        return Result.success();
+        StpUtil.login(user.getId());
+        String token = StpUtil.getTokenValue();
+        LoginVO loginVO = new LoginVO();
+        loginVO.setToken(token);
+        loginVO.setUserId(user.getId());
+        loginVO.setUsername(user.getUsername());
+        loginVO.setRole(user.getRole());
+        loginVO.setAvatarUrl(user.getAvatarUrl());
+
+        log.info("注册成功并自动登录！{},{}", loginVO.getUserId(), loginVO.getUsername());
+
+        return Result.success(loginVO);
     }
 
     @Operation(summary = "用户登录", description = "支持邮箱/手机号+密码登录，返回JWT Token")

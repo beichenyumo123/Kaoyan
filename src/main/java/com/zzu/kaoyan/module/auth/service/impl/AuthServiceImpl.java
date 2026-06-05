@@ -40,18 +40,17 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public void register(RegisterDTO registerDTO) {
+    public User register(RegisterDTO registerDTO) {
         checkUserExists(registerDTO);
         User user = new User();
         BeanUtils.copyProperties(registerDTO, user);
         user.setRole("USER");
         user.setPassword(BCrypt.hashpw(user.getPassword(), BCrypt.gensalt()));
 
-        // ⚠️ 关键修改：插入后，MyBatis-Plus 会自动将生成的 ID 回填到 user 对象
         authMapper.insert(user);
 
-        // 此时 user.getId() 就是数据库自动生成的正确 ID
-        System.out.println("注册成功，生成的用户ID: " + user.getId());
+        user.setPassword(null);
+        return user;
     }
 
     private void checkUserExists(RegisterDTO registerDTO) {
