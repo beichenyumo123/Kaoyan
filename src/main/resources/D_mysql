@@ -238,6 +238,11 @@ INSERT INTO experience_post_collect (experience_id, user_id) VALUES
 (3, 5),
 (4, 3), (4, 6);
 
--- 8.6 同步 like_count / collect_count
-UPDATE experience_post SET like_count = (SELECT COUNT(*) FROM experience_post_like WHERE experience_id = experience_post.id);
-UPDATE experience_post SET collect_count = (SELECT COUNT(*) FROM experience_post_collect WHERE experience_id = experience_post.id);
+-- 8.6 安全同步 like_count / collect_count（无全表更新警告）
+UPDATE experience_post e
+SET like_count = (SELECT COUNT(*) FROM experience_post_like l WHERE l.experience_id = e.id)
+WHERE e.id > 0;
+
+UPDATE experience_post e
+SET collect_count = (SELECT COUNT(*) FROM experience_post_collect c WHERE c.experience_id = e.id)
+WHERE e.id > 0;
