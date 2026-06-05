@@ -46,7 +46,7 @@ public class AiAgentController {
 
     private final AiDailyTaskMapper taskMapper;
     private final AiInterventionLogMapper interventionMapper;
-    private final KnowledgePointMapper knowledgePointMapper;
+    private final AiKnowledgePointMapper knowledgePointMapper;
     private final AiReportMapper reportMapper;
     private final AiUserEventMapper userEventMapper;
     private final UserAiProfileMapper userProfileMapper;
@@ -59,7 +59,7 @@ public class AiAgentController {
 
     public AiAgentController(AiDailyTaskMapper taskMapper,
                              AiInterventionLogMapper interventionMapper,
-                             KnowledgePointMapper knowledgePointMapper,
+                             AiKnowledgePointMapper knowledgePointMapper,
                              AiReportMapper reportMapper,
                              AiUserEventMapper userEventMapper,
                              UserAiProfileMapper userProfileMapper,

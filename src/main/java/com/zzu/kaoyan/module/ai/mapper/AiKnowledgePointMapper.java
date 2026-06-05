@@ -11,7 +11,7 @@ import java.util.List;
  * 考研知识点 Mapper — 支持关键词检索（RAG 检索层）。
  */
 @Mapper
-public interface KnowledgePointMapper extends BaseMapper<KnowledgePoint> {
+public interface AiKnowledgePointMapper extends BaseMapper<KnowledgePoint> {
 
     /**
      * 按关键词模糊检索知识点（RAG 核心方法）。

@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zzu.kaoyan.module.ai.config.AiApiProperties;
 import com.zzu.kaoyan.module.ai.entity.KnowledgePoint;
-import com.zzu.kaoyan.module.ai.mapper.KnowledgePointMapper;
+import com.zzu.kaoyan.module.ai.mapper.AiKnowledgePointMapper;
 import com.zzu.kaoyan.module.ai.service.AiAgentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,14 +61,14 @@ public class TutorAgent {
     /** Tool Calling 最大轮次（防止无限循环） */
     private static final int MAX_TOOL_ROUNDS = 3;
 
-    private final KnowledgePointMapper knowledgePointMapper;
+    private final AiKnowledgePointMapper knowledgePointMapper;
     private final AiAgentService aiAgentService;
     private final RestTemplate aiRestTemplate;
     private final RestTemplate aiStreamRestTemplate;
     private final AiApiProperties apiProperties;
     private final ObjectMapper objectMapper;
 
-    public TutorAgent(KnowledgePointMapper knowledgePointMapper,
+    public TutorAgent(AiKnowledgePointMapper knowledgePointMapper,
                       AiAgentService aiAgentService,
                       RestTemplate aiRestTemplate,
                       @Qualifier("aiStreamRestTemplate") RestTemplate aiStreamRestTemplate,

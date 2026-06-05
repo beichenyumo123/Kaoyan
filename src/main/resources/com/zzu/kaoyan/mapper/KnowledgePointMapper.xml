@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.zzu.kaoyan.module.ai.mapper.KnowledgePointMapper">
+<mapper namespace="com.zzu.kaoyan.module.ai.mapper.AiKnowledgePointMapper">
 
     <!--
         RAG 检索：对每个搜索词用 OR 拼接 LIKE 条件，匹配标题/关键词/内容。
