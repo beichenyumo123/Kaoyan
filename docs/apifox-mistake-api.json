@@ -1,0 +1,535 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "智能错题本 API",
+    "description": "OCR 智能错题本 + 艾宾浩斯复习计划 —— 拍照→OCR→入错题本→按遗忘曲线自动推送复习。含知识点树、Markdown渲染、日历视图、遗忘曲线统计、PDF导出、复习提醒通知。",
+    "version": "2.0.0"
+  },
+  "servers": [
+    { "url": "http://localhost:8081", "description": "本地开发环境" }
+  ],
+  "security": [
+    { "SaToken": [] }
+  ],
+  "components": {
+    "securitySchemes": {
+      "SaToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "登录后返回的 token 值"
+      }
+    },
+    "schemas": {
+      "MistakeNoteCreateDTO": {
+        "type": "object",
+        "required": ["subject", "questionContent"],
+        "properties": {
+          "subject": { "type": "string", "description": "科目", "example": "408计算机", "enum": ["政治", "英语(一)", "英语(二)", "数学(一)", "数学(二)", "数学(三)", "408计算机", "其他"] },
+          "questionContent": { "type": "string", "description": "题目内容（OCR识别的文本或手动输入，支持Markdown）", "example": "在操作系统中，哪种进程调度算法可能产生饥饿现象？" },
+          "answer": { "type": "string", "description": "答案与解析（支持Markdown）", "example": "短作业优先(SJF)算法可能导致长作业长期得不到调度，产生饥饿现象。" },
+          "imageUrl": { "type": "string", "description": "题目原图URL（先调 /api/upload/image 上传获取）", "example": "/uploads/images/202605/abc123.jpg" },
+          "knowledgePoints": { "type": "string", "description": "知识点标签，多个用逗号分隔", "example": "操作系统-进程调度,数据结构-二叉树" },
+          "source": { "type": "string", "description": "题目来源", "example": "2023真题" },
+          "difficulty": { "type": "integer", "description": "难度 1-5", "example": 3, "minimum": 1, "maximum": 5 }
+        }
+      },
+      "MistakeNoteUpdateDTO": {
+        "type": "object",
+        "properties": {
+          "questionContent": { "type": "string", "description": "题目内容（支持Markdown）" },
+          "answer": { "type": "string", "description": "答案与解析（支持Markdown）" },
+          "imageUrl": { "type": "string", "description": "原题图片URL" },
+          "knowledgePoints": { "type": "string", "description": "知识点标签" },
+          "source": { "type": "string", "description": "题目来源" },
+          "difficulty": { "type": "integer", "description": "难度 1-5" },
+          "masteryLevel": { "type": "integer", "description": "手动修正掌握度 0-100", "minimum": 0, "maximum": 100 }
+        }
+      },
+      "ReviewCompleteDTO": {
+        "type": "object",
+        "required": ["masteryAfter", "isCorrect"],
+        "properties": {
+          "masteryAfter": { "type": "integer", "description": "复习后掌握度 0-100", "example": 60, "minimum": 0, "maximum": 100 },
+          "isCorrect": { "type": "integer", "description": "1=答对 0=答错", "example": 1, "enum": [0, 1] }
+        }
+      },
+      "MarkdownRenderRequestDTO": {
+        "type": "object",
+        "required": ["markdown"],
+        "properties": {
+          "markdown": { "type": "string", "description": "原始Markdown文本", "example": "# 题目\n\n已知 $f(x) = x^2$，求 $\\int_0^1 f(x) dx$" }
+        }
+      },
+      "MarkdownRenderVO": {
+        "type": "object",
+        "properties": {
+          "html": { "type": "string", "description": "渲染后的HTML（已做XSS清洗）", "example": "<h1>题目</h1><p>已知 ...</p>" }
+        }
+      },
+      "PdfExportRequestDTO": {
+        "type": "object",
+        "required": ["noteIds"],
+        "properties": {
+          "noteIds": { "type": "array", "items": { "type": "integer", "format": "int64" }, "description": "要导出的错题ID列表", "example": [1, 2, 3] },
+          "includeAnswer": { "type": "boolean", "description": "是否包含答案与解析，默认true", "example": true, "default": true },
+          "includeImage": { "type": "boolean", "description": "是否内嵌原题图片，默认false", "example": false, "default": false }
+        }
+      },
+      "OCRResultVO": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string", "description": "OCR识别的文字内容" },
+          "imageUrl": { "type": "string", "description": "原图URL" },
+          "suggestedSubject": { "type": "string", "description": "建议科目（基于关键词命中率计分）", "example": "408计算机" },
+          "suggestedKnowledgePoints": { "type": "string", "description": "建议知识点，逗号分隔", "example": "操作系统-进程调度" },
+          "matchedKnowledgePointIds": { "type": "array", "items": { "type": "integer", "format": "int64" }, "description": "匹配到的知识树知识点ID列表", "example": [46, 47] },
+          "matchedKnowledgePointNames": { "type": "array", "items": { "type": "string" }, "description": "匹配到的知识点名称列表", "example": ["进程管理", "进程状态与转换"] },
+          "suggestedDifficulty": { "type": "integer", "description": "推测难度 1-5", "example": 3, "minimum": 1, "maximum": 5 }
+        }
+      },
+      "MistakeNoteVO": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "错题ID（Snowflake ID，JS需字符串接收）" },
+          "userId": { "type": "string", "description": "用户ID（Snowflake ID）" },
+          "subject": { "type": "string", "description": "科目", "example": "408计算机" },
+          "questionContent": { "type": "string", "description": "题目内容（原始Markdown）" },
+          "questionContentHtml": { "type": "string", "description": "题目渲染后HTML（仅renderHtml=true时填充）" },
+          "answer": { "type": "string", "description": "答案与解析（原始Markdown）" },
+          "answerHtml": { "type": "string", "description": "答案渲染后HTML（仅renderHtml=true时填充）" },
+          "imageUrl": { "type": "string", "nullable": true, "description": "原题图片URL" },
+          "knowledgePoints": { "type": "string", "description": "知识点标签" },
+          "source": { "type": "string", "description": "题目来源" },
+          "difficulty": { "type": "integer", "description": "难度 1-5" },
+          "masteryLevel": { "type": "integer", "description": "掌握度 0-100" },
+          "reviewStage": { "type": "integer", "description": "艾宾浩斯阶段 0-7" },
+          "reviewCount": { "type": "integer", "description": "累计复习次数" },
+          "nextReviewDate": { "type": "string", "format": "date", "description": "下次复习日期，null=已掌握" },
+          "lastReviewDate": { "type": "string", "format": "date", "nullable": true, "description": "上次复习日期" },
+          "createdAt": { "type": "string", "format": "date-time", "description": "创建时间" },
+          "updatedAt": { "type": "string", "format": "date-time", "description": "更新时间" },
+          "reviewStageText": { "type": "string", "description": "阶段描述", "example": "第3次复习(2天后)" }
+        }
+      },
+      "ReviewTaskVO": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "每日计划ID（Snowflake ID）" },
+          "noteId": { "type": "string", "description": "错题ID（用于完成复习接口，Snowflake ID）" },
+          "subject": { "type": "string", "description": "科目" },
+          "questionContent": { "type": "string", "description": "题目内容" },
+          "answer": { "type": "string", "description": "答案与解析" },
+          "knowledgePoints": { "type": "string", "description": "知识点标签" },
+          "difficulty": { "type": "integer", "description": "难度 1-5" },
+          "masteryLevel": { "type": "integer", "description": "掌握度 0-100" },
+          "reviewStage": { "type": "integer", "description": "艾宾浩斯阶段" },
+          "reviewStageText": { "type": "string", "description": "阶段描述" },
+          "reviewCount": { "type": "integer", "description": "累计复习次数" },
+          "isCompleted": { "type": "boolean", "description": "今日是否已完成" },
+          "planDate": { "type": "string", "format": "date", "description": "计划日期" }
+        }
+      },
+      "MistakeStatsVO": {
+        "type": "object",
+        "properties": {
+          "totalNotes": { "type": "integer", "description": "错题总数", "example": 45 },
+          "todayReviewCount": { "type": "integer", "description": "今日待复习数", "example": 8 },
+          "reviewedToday": { "type": "integer", "description": "今日已完成数", "example": 3 },
+          "avgMastery": { "type": "number", "description": "平均掌握度", "example": 62.5 },
+          "subjectDistribution": { "type": "object", "description": "科目分布", "example": { "408计算机": 15, "数学(一)": 10 } },
+          "stageDistribution": { "type": "object", "description": "阶段分布", "example": { "0": 5, "1": 8, "3": 12, "7": 3 } }
+        }
+      },
+      "ReviewResultVO": {
+        "type": "object",
+        "properties": {
+          "noteId": { "type": "string", "description": "错题ID（Snowflake ID）" },
+          "reviewStage": { "type": "integer", "description": "更新后艾宾浩斯阶段 0-7" },
+          "reviewStageText": { "type": "string", "description": "阶段中文描述", "example": "第3次复习(2天后)" },
+          "masteryLevel": { "type": "integer", "description": "更新后掌握度 0-100" },
+          "nextReviewDate": { "type": "string", "format": "date", "description": "下次复习日期" },
+          "reviewCount": { "type": "integer", "description": "累计复习次数" },
+          "isCorrect": { "type": "integer", "description": "本次是否答对 1=对 0=错", "enum": [0, 1] }
+        }
+      },
+      "KnowledgePointVO": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "知识点ID" },
+          "parentId": { "type": "string", "nullable": true, "description": "父节点ID，null=根节点" },
+          "name": { "type": "string", "description": "知识点名称", "example": "进程管理" },
+          "subject": { "type": "string", "description": "所属科目", "example": "408计算机" },
+          "level": { "type": "integer", "description": "层级 0=根 1=章 2=节 3=知识点", "example": 1 },
+          "sortOrder": { "type": "integer", "description": "排序序号" },
+          "children": { "type": "array", "items": { "$ref": "#/components/schemas/KnowledgePointVO" }, "description": "子节点（递归）" }
+        }
+      },
+      "CalendarDayVO": {
+        "type": "object",
+        "properties": {
+          "day": { "type": "integer", "description": "日期（几号）", "example": 15 },
+          "count": { "type": "integer", "description": "当日待复习总数", "example": 5 },
+          "completedCount": { "type": "integer", "description": "当日已完成数", "example": 2 },
+          "isToday": { "type": "boolean", "description": "是否为今天", "example": false }
+        }
+      },
+      "CalendarMonthVO": {
+        "type": "object",
+        "properties": {
+          "year": { "type": "integer", "description": "年份", "example": 2026 },
+          "month": { "type": "integer", "description": "月份 1-12", "example": 6 },
+          "days": { "type": "array", "items": { "$ref": "#/components/schemas/CalendarDayVO" }, "description": "当月每一天的数据" }
+        }
+      },
+      "StageIntervalVO": {
+        "type": "object",
+        "properties": {
+          "stage": { "type": "integer", "description": "阶段号 0-7", "example": 2 },
+          "stageText": { "type": "string", "description": "阶段名称", "example": "第2次复习(1天后)" },
+          "intervalDays": { "type": "integer", "description": "距上次复习间隔（天）", "example": 2 },
+          "count": { "type": "integer", "description": "处于该阶段的题目数", "example": 8 },
+          "avgMastery": { "type": "number", "description": "该阶段平均掌握度", "example": 65.5 }
+        }
+      },
+      "DailyAccuracyVO": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "format": "date", "description": "日期" },
+          "totalReviewed": { "type": "integer", "description": "当日复习总题数", "example": 10 },
+          "correct": { "type": "integer", "description": "当日答对题数", "example": 7 }
+        }
+      },
+      "MasteryDistributionVO": {
+        "type": "object",
+        "properties": {
+          "range": { "type": "string", "description": "掌握度区间", "example": "61-80" },
+          "count": { "type": "integer", "description": "该区间题目数", "example": 12 }
+        }
+      },
+      "EbbinghausStatsVO": {
+        "type": "object",
+        "properties": {
+          "stageDistribution": { "type": "array", "items": { "$ref": "#/components/schemas/StageIntervalVO" }, "description": "各阶段分布（遗忘曲线柱状图）" },
+          "dailyAccuracyTrend": { "type": "array", "items": { "$ref": "#/components/schemas/DailyAccuracyVO" }, "description": "最近N天准确率趋势（折线图）" },
+          "masteryDistribution": { "type": "array", "items": { "$ref": "#/components/schemas/MasteryDistributionVO" }, "description": "掌握度分布（饼图）" }
+        }
+      },
+      "MistakeNotificationVO": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "description": "通知ID" },
+          "type": { "type": "string", "description": "类型", "example": "REVIEW_REMINDER", "enum": ["REVIEW_REMINDER", "MASTERY_MILESTONE", "STAGE_MASTERED"] },
+          "title": { "type": "string", "description": "标题", "example": "今日复习提醒" },
+          "content": { "type": "string", "description": "正文", "example": "你今天有 8 道错题待复习" },
+          "isRead": { "type": "boolean", "description": "是否已读", "example": false },
+          "createdAt": { "type": "string", "format": "date-time", "description": "创建时间" }
+        }
+      },
+      "UnreadCountVO": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "integer", "description": "未读通知数", "example": 3 }
+        }
+      },
+      "PageInfo_MistakeNoteVO": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "total": { "type": "integer", "format": "int64", "description": "总条数" },
+          "pageNum": { "type": "integer", "description": "当前页码" },
+          "pageSize": { "type": "integer", "description": "每页条数" },
+          "list": { "type": "array", "items": { "$ref": "#/components/schemas/MistakeNoteVO" }, "description": "数据列表" }
+        }
+      },
+      "PageInfo_ReviewTaskVO": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "total": { "type": "integer", "format": "int64", "description": "总条数" },
+          "pageNum": { "type": "integer", "description": "当前页码" },
+          "pageSize": { "type": "integer", "description": "每页条数" },
+          "list": { "type": "array", "items": { "$ref": "#/components/schemas/ReviewTaskVO" }, "description": "数据列表" }
+        }
+      },
+      "PageInfo_MistakeNotificationVO": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "total": { "type": "integer", "format": "int64", "description": "总条数" },
+          "pageNum": { "type": "integer", "description": "当前页码" },
+          "pageSize": { "type": "integer", "description": "每页条数" },
+          "list": { "type": "array", "items": { "$ref": "#/components/schemas/MistakeNotificationVO" }, "description": "数据列表" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/api/mistake/ocr": {
+      "post": {
+        "tags": ["OCR识别"],
+        "summary": "OCR 识别题目图片",
+        "description": "上传图片URL（先调 /api/upload/image 获取），返回PaddleOCR识别的文字 + 建议科目 + 知识树匹配的知识点ID/名称 + 推测难度",
+        "operationId": "ocr",
+        "parameters": [
+          { "name": "imageUrl", "in": "query", "required": true, "schema": { "type": "string" }, "description": "图片URL", "example": "/uploads/images/202605/abc123.jpg" },
+          { "name": "subject", "in": "query", "required": false, "schema": { "type": "string" }, "description": "科目提示（可选，提高关键词匹配精度）", "example": "408计算机" }
+        ],
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OCRResultVO" } } } }
+        }
+      }
+    },
+    "/api/mistake/knowledge-points/tree": {
+      "get": {
+        "tags": ["知识体系"],
+        "summary": "获取知识树",
+        "description": "返回指定科目的完整知识点树（递归结构）。不传subject则返回全部科目",
+        "operationId": "knowledgePointTree",
+        "parameters": [
+          { "name": "subject", "in": "query", "required": false, "schema": { "type": "string" }, "description": "科目名称", "example": "408计算机" }
+        ],
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/KnowledgePointVO" } } } } }
+        }
+      }
+    },
+    "/api/mistake/knowledge-points/search": {
+      "get": {
+        "tags": ["知识体系"],
+        "summary": "搜索知识点",
+        "description": "按关键词模糊搜索知识点，返回扁平列表（最多50条），用于前端搜索框自动补全",
+        "operationId": "knowledgePointSearch",
+        "parameters": [
+          { "name": "keyword", "in": "query", "required": true, "schema": { "type": "string" }, "description": "搜索关键词", "example": "进程" }
+        ],
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/KnowledgePointVO" } } } } }
+        }
+      }
+    },
+    "/api/mistake/markdown/render": {
+      "post": {
+        "tags": ["错题管理"],
+        "summary": "Markdown 实时渲染",
+        "description": "将Markdown文本渲染为HTML（支持表格/删除线/任务列表）。前端编辑器实时预览用，渲染后经jsoup XSS清洗",
+        "operationId": "renderMarkdown",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MarkdownRenderRequestDTO" } } } },
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MarkdownRenderVO" } } } }
+        }
+      }
+    },
+    "/api/mistake/notes": {
+      "post": {
+        "tags": ["错题管理"],
+        "summary": "创建错题",
+        "description": "将OCR结果或手动输入的题目保存到错题本。自动设置首次复习日期=明天（艾宾浩斯第0阶段）。题目和答案支持Markdown",
+        "operationId": "createNote",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MistakeNoteCreateDTO" } } } },
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MistakeNoteVO" } } } }
+        }
+      },
+      "get": {
+        "tags": ["错题管理"],
+        "summary": "分页查询错题本",
+        "description": "查询当前用户错题，支持按科目筛选，按创建时间倒序",
+        "operationId": "pageNotes",
+        "parameters": [
+          { "name": "pageNum", "in": "query", "required": false, "schema": { "type": "integer", "default": 1 }, "description": "页码", "example": 1 },
+          { "name": "pageSize", "in": "query", "required": false, "schema": { "type": "integer", "default": 10 }, "description": "每页条数", "example": 10 },
+          { "name": "subject", "in": "query", "required": false, "schema": { "type": "string" }, "description": "科目筛选，不传查全部", "example": "408计算机" }
+        ],
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageInfo_MistakeNoteVO" } } } }
+        }
+      },
+      "put": {
+        "tags": ["错题管理"],
+        "summary": "更新错题",
+        "description": "传什么改什么，不传的字段保持不变。题目和答案支持Markdown",
+        "operationId": "updateNote",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MistakeNoteUpdateDTO" } } } },
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MistakeNoteVO" } } } }
+        }
+      }
+    },
+    "/api/mistake/notes/{id}": {
+      "get": {
+        "tags": ["错题管理"],
+        "summary": "查看错题详情",
+        "description": "查看单题详情，可选渲染Markdown为HTML（传renderHtml=true时返回questionContentHtml和answerHtml字段）",
+        "operationId": "getNote",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" }, "description": "错题ID" },
+          { "name": "renderHtml", "in": "query", "required": false, "schema": { "type": "boolean", "default": false }, "description": "是否渲染Markdown为HTML" }
+        ],
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MistakeNoteVO" } } } }
+        }
+      },
+      "delete": {
+        "tags": ["错题管理"],
+        "summary": "删除错题（逻辑删除）",
+        "description": "逻辑删除，不物理删除数据。删除后不再参与复习计划",
+        "operationId": "deleteNote",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" }, "description": "错题ID" }
+        ],
+        "responses": {
+          "200": { "description": "成功" }
+        }
+      }
+    },
+    "/api/mistake/export/pdf": {
+      "post": {
+        "tags": ["错题管理"],
+        "summary": "导出错题 PDF",
+        "description": "将选中的错题导出为A4 PDF文档。自动查找系统CJK字体（微软雅黑/宋体/NotoSans等），无需额外配置。返回二进制PDF文件",
+        "operationId": "exportPdf",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PdfExportRequestDTO" } } } },
+        "responses": {
+          "200": { "description": "PDF二进制文件", "content": { "application/pdf": { "schema": { "type": "string", "format": "binary" } } } }
+        }
+      }
+    },
+    "/api/mistake/review/today": {
+      "get": {
+        "tags": ["复习计划"],
+        "summary": "今日待复习错题列表",
+        "description": "根据艾宾浩斯遗忘曲线计算今日应复习的错题。每日7:00定时任务自动生成计划，也可手动调用此接口触发生成",
+        "operationId": "todayReview",
+        "parameters": [
+          { "name": "pageNum", "in": "query", "required": false, "schema": { "type": "integer", "default": 1 }, "description": "页码", "example": 1 },
+          { "name": "pageSize", "in": "query", "required": false, "schema": { "type": "integer", "default": 10 }, "description": "每页条数", "example": 10 }
+        ],
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageInfo_ReviewTaskVO" } } } }
+        }
+      }
+    },
+    "/api/mistake/review/{noteId}/complete": {
+      "post": {
+        "tags": ["复习计划"],
+        "summary": "完成一道错题的复习",
+        "description": "记录复习日志 → 更新掌握度 → 推进艾宾浩斯阶段 → 计算下次复习日期 → 同步每日计划。答对+15掌握度，答错-10。达到阶段8=长期记忆。跨过80分/达到阶段8会自动创建通知",
+        "operationId": "completeReview",
+        "parameters": [
+          { "name": "noteId", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" }, "description": "错题ID" }
+        ],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReviewCompleteDTO" } } } },
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReviewResultVO" } } } }
+        }
+      }
+    },
+    "/api/mistake/calendar": {
+      "get": {
+        "tags": ["复习计划"],
+        "summary": "月度复习日历",
+        "description": "返回指定月份每天的计划复习数/已完成数，用于前端日历视图。缺失日期自动补0",
+        "operationId": "calendarMonth",
+        "parameters": [
+          { "name": "year", "in": "query", "required": true, "schema": { "type": "integer" }, "description": "年份", "example": 2026 },
+          { "name": "month", "in": "query", "required": true, "schema": { "type": "integer", "minimum": 1, "maximum": 12 }, "description": "月份", "example": 6 }
+        ],
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CalendarMonthVO" } } } }
+        }
+      }
+    },
+    "/api/mistake/calendar/{date}/notes": {
+      "get": {
+        "tags": ["复习计划"],
+        "summary": "指定日期的待复习列表",
+        "description": "点击日历中的某一天，查看当天的待复习错题列表。会触发该日期的复习计划生成",
+        "operationId": "calendarDayNotes",
+        "parameters": [
+          { "name": "date", "in": "path", "required": true, "schema": { "type": "string", "format": "date" }, "description": "日期 yyyy-MM-dd", "example": "2026-06-04" },
+          { "name": "pageNum", "in": "query", "required": false, "schema": { "type": "integer", "default": 1 }, "description": "页码", "example": 1 },
+          { "name": "pageSize", "in": "query", "required": false, "schema": { "type": "integer", "default": 10 }, "description": "每页条数", "example": 10 }
+        ],
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageInfo_ReviewTaskVO" } } } }
+        }
+      }
+    },
+    "/api/mistake/stats": {
+      "get": {
+        "tags": ["统计"],
+        "summary": "错题本统计概览",
+        "description": "返回总错题数、今日待复习/已完成、平均掌握度、科目分布、艾宾浩斯阶段分布",
+        "operationId": "stats",
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MistakeStatsVO" } } } }
+        }
+      }
+    },
+    "/api/mistake/stats/ebbinghaus": {
+      "get": {
+        "tags": ["统计"],
+        "summary": "艾宾浩斯遗忘曲线统计",
+        "description": "返回三组数据：阶段分布（遗忘曲线柱状图）、每日准确率趋势（折线图）、掌握度分布（饼图）。days参数控制准确率趋势的统计天数",
+        "operationId": "ebbinghausStats",
+        "parameters": [
+          { "name": "days", "in": "query", "required": false, "schema": { "type": "integer", "default": 30 }, "description": "准确率趋势统计天数", "example": 30 }
+        ],
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EbbinghausStatsVO" } } } }
+        }
+      }
+    },
+    "/api/mistake/notifications": {
+      "get": {
+        "tags": ["通知"],
+        "summary": "通知列表",
+        "description": "分页获取当前用户的通知，按创建时间倒序。类型包括：REVIEW_REMINDER（复习提醒）、MASTERY_MILESTONE（掌握度里程碑）、STAGE_MASTERED（错题通关）",
+        "operationId": "notifications",
+        "parameters": [
+          { "name": "pageNum", "in": "query", "required": false, "schema": { "type": "integer", "default": 1 }, "description": "页码", "example": 1 },
+          { "name": "pageSize", "in": "query", "required": false, "schema": { "type": "integer", "default": 20 }, "description": "每页条数", "example": 20 }
+        ],
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageInfo_MistakeNotificationVO" } } } }
+        }
+      }
+    },
+    "/api/mistake/notifications/unread-count": {
+      "get": {
+        "tags": ["通知"],
+        "summary": "未读通知数",
+        "description": "获取当前用户未读通知数量，用于前端小红点/角标。建议每60秒轮询一次",
+        "operationId": "unreadCount",
+        "responses": {
+          "200": { "description": "成功", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UnreadCountVO" } } } }
+        }
+      }
+    },
+    "/api/mistake/notifications/{id}/read": {
+      "put": {
+        "tags": ["通知"],
+        "summary": "标记通知已读",
+        "operationId": "markRead",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "format": "int64" }, "description": "通知ID" }
+        ],
+        "responses": {
+          "200": { "description": "成功" }
+        }
+      }
+    },
+    "/api/mistake/notifications/read-all": {
+      "put": {
+        "tags": ["通知"],
+        "summary": "全部标记已读",
+        "description": "将当前用户所有未读通知标记为已读",
+        "operationId": "markAllRead",
+        "responses": {
+          "200": { "description": "成功" }
+        }
+      }
+    }
+  }
+}
