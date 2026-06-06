@@ -25,6 +25,8 @@ public class MistakeNotePO {
     private Integer reviewCount;
     private LocalDate nextReviewDate;
     private LocalDate lastReviewDate;
+    private Long chatMessageId;
+    private String sourceType;
     private Integer isDeleted;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

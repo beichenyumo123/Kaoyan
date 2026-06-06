@@ -7,6 +7,7 @@ import com.zzu.kaoyan.module.mistake.entity.dto.MarkdownRenderRequestDTO;
 import com.zzu.kaoyan.module.mistake.entity.dto.MistakeNoteCreateDTO;
 import com.zzu.kaoyan.module.mistake.entity.dto.MistakeNoteUpdateDTO;
 import com.zzu.kaoyan.module.mistake.entity.dto.PdfExportRequestDTO;
+import com.zzu.kaoyan.module.mistake.entity.dto.QuickSaveDTO;
 import com.zzu.kaoyan.module.mistake.entity.dto.ReviewCompleteDTO;
 import com.zzu.kaoyan.module.mistake.entity.vo.*;
 import com.zzu.kaoyan.module.mistake.service.MistakeNotePdfService;
@@ -26,6 +27,8 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/mistake")
@@ -59,6 +62,22 @@ public class MistakeNoteController {
     public Result<MistakeNoteVO> create(@Valid @RequestBody MistakeNoteCreateDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
         return Result.success(mistakeNoteService.create(dto, userId));
+    }
+
+    @Operation(summary = "从 AI 对话快速收藏", description = "将 AI 答疑中的对话快速保存到错题本，支持去重检查")
+    @PostMapping("/quick-save")
+    public Result<Map<String, Object>> quickSave(@Valid @RequestBody QuickSaveDTO dto) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        return Result.success(mistakeNoteService.quickSave(dto, userId));
+    }
+
+    @Operation(summary = "批量检查消息是否已收藏", description = "传入 AI 消息ID列表，返回已收藏的ID集合，用于按钮状态显示")
+    @PostMapping("/check-saved")
+    public Result<Map<String, Object>> checkSaved(@RequestBody Map<String, List<Long>> body) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        List<Long> chatMessageIds = body.get("chatMessageIds");
+        List<Long> savedIds = mistakeNoteService.checkSaved(chatMessageIds, userId);
+        return Result.success(Map.of("savedIds", savedIds));
     }
 
     @Operation(summary = "更新错题", description = "修改错题内容、答案、知识点等。传什么改什么，不传的字段保持不变。")

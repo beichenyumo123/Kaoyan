@@ -20,4 +20,7 @@ public class AiAskDTO {
 
     @Schema(description = "会话ID（可选，为空则自动创建新会话）")
     private Long sessionId;
+
+    @Schema(description = "图片URL（可选，支持图片问答）")
+    private String imageUrl;
 }

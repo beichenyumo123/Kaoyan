@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS `ai_chat_message` (
   `session_id`  BIGINT NOT NULL COMMENT '所属会话ID',
   `role`        VARCHAR(20) NOT NULL COMMENT '角色: user / assistant',
   `content`     TEXT NOT NULL COMMENT '消息内容',
+  `image_url`   VARCHAR(500) DEFAULT NULL COMMENT '图片URL（用户发送的图片）',
   `created_at`  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_session_created` (`session_id`, `created_at`)

@@ -190,10 +190,10 @@ public class AiAgentController {
 
         // 处理会话
         SessionInfo sessionInfo = ensureSession(userId, dto.getSessionId(), dto.getQuestion());
-        saveMessage(sessionInfo.id, "user", dto.getQuestion());
+        saveMessage(sessionInfo.id, "user", dto.getQuestion(), dto.getImageUrl());
 
-        String answer = tutorAgent.answer(dto.getQuestion(), dto.getSubject());
-        saveMessage(sessionInfo.id, "assistant", answer);
+        String answer = tutorAgent.answer(dto.getQuestion(), dto.getSubject(), dto.getImageUrl());
+        saveMessage(sessionInfo.id, "assistant", answer, null);
 
         Map<String, String> data = new HashMap<>();
         data.put("answer", answer);
@@ -230,7 +230,7 @@ public class AiAgentController {
 
         // 处理会话（在同步线程中完成，避免异步上下文丢失）
         SessionInfo sessionInfo = ensureSession(userId, dto.getSessionId(), dto.getQuestion());
-        saveMessage(sessionInfo.id, "user", dto.getQuestion());
+        saveMessage(sessionInfo.id, "user", dto.getQuestion(), dto.getImageUrl());
 
         // 异步执行，不阻塞请求线程
         CompletableFuture.runAsync(() -> {
@@ -240,7 +240,7 @@ public class AiAgentController {
                 emitter.send(objectMapper.writeValueAsString(
                         Map.of("type", "meta", "sessionId", sessionInfo.id, "title", sessionInfo.title)));
 
-                tutorAgent.answerStream(dto.getQuestion(), dto.getSubject(), chunk -> {
+                tutorAgent.answerStream(dto.getQuestion(), dto.getSubject(), dto.getImageUrl(), chunk -> {
                     fullAnswer.append(chunk);
                     try {
                         // 用 JSON 包裹 chunk，确保 \n 等特殊字符正确转义，不会破坏 SSE 协议格式
@@ -250,13 +250,13 @@ public class AiAgentController {
                     }
                 });
                 // 流式完成后保存 AI 回复到数据库
-                saveMessage(sessionInfo.id, "assistant", fullAnswer.toString());
+                saveMessage(sessionInfo.id, "assistant", fullAnswer.toString(), null);
                 emitter.complete();
             } catch (Exception e) {
                 log.error("SSE 流式答疑失败 — userId={}", userId, e);
                 // 即使失败也保存已有的部分回复
                 if (fullAnswer.length() > 0) {
-                    saveMessage(sessionInfo.id, "assistant", fullAnswer.toString());
+                    saveMessage(sessionInfo.id, "assistant", fullAnswer.toString(), null);
                 }
                 emitter.completeWithError(e);
             }
@@ -446,8 +446,10 @@ public class AiAgentController {
 
         List<ChatMessageVO> voList = messages.stream().map(m -> {
             ChatMessageVO vo = new ChatMessageVO();
+            vo.setId(m.getId());
             vo.setRole(m.getRole());
             vo.setContent(m.getContent());
+            vo.setImageUrl(m.getImageUrl());
             vo.setCreatedAt(m.getCreatedAt());
             return vo;
         }).collect(Collectors.toList());
@@ -678,11 +680,12 @@ public class AiAgentController {
     /**
      * 保存一条消息到数据库。
      */
-    private void saveMessage(Long sessionId, String role, String content) {
+    private void saveMessage(Long sessionId, String role, String content, String imageUrl) {
         AiChatMessage msg = new AiChatMessage();
         msg.setSessionId(sessionId);
         msg.setRole(role);
         msg.setContent(content);
+        msg.setImageUrl(imageUrl);
         msg.setCreatedAt(LocalDateTime.now());
         chatMessageMapper.insert(msg);
     }

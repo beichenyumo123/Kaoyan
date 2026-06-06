@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS `mistake_note` (
     `review_count` INT DEFAULT 0 COMMENT '累计复习次数',
     `next_review_date` DATE COMMENT '下次复习日期',
     `last_review_date` DATE COMMENT '上次复习日期',
+    `chat_message_id` BIGINT DEFAULT NULL COMMENT '来源AI消息ID（从AI对话收藏时记录）',
+    `source_type` VARCHAR(20) DEFAULT 'MANUAL' COMMENT '来源类型：MANUAL/OCR/AI_CHAT',
     `is_deleted` TINYINT DEFAULT 0 COMMENT '逻辑删除',
     `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -25,7 +27,8 @@ CREATE TABLE IF NOT EXISTS `mistake_note` (
     INDEX `idx_user_id` (`user_id`),
     INDEX `idx_next_review` (`user_id`, `next_review_date`),
     INDEX `idx_subject` (`user_id`, `subject`),
-    INDEX `idx_mastery` (`user_id`, `mastery_level`)
+    INDEX `idx_mastery` (`user_id`, `mastery_level`),
+    INDEX `idx_chat_msg` (`chat_message_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='错题本';
 
 -- 复习日志表

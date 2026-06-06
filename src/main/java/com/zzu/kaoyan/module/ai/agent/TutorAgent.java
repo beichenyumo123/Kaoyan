@@ -7,7 +7,12 @@ import com.zzu.kaoyan.module.ai.config.AiApiProperties;
 import com.zzu.kaoyan.module.ai.entity.KnowledgePoint;
 import com.zzu.kaoyan.module.ai.mapper.AiKnowledgePointMapper;
 import com.zzu.kaoyan.module.ai.service.AiAgentService;
+import com.zzu.kaoyan.module.mistake.entity.vo.OCRResultVO;
+import com.zzu.kaoyan.module.mistake.service.OCRService;
 import org.slf4j.Logger;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Base64;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
@@ -67,18 +72,21 @@ public class TutorAgent {
     private final RestTemplate aiStreamRestTemplate;
     private final AiApiProperties apiProperties;
     private final ObjectMapper objectMapper;
+    private final OCRService ocrService;
 
     public TutorAgent(AiKnowledgePointMapper knowledgePointMapper,
                       AiAgentService aiAgentService,
                       RestTemplate aiRestTemplate,
                       @Qualifier("aiStreamRestTemplate") RestTemplate aiStreamRestTemplate,
-                      AiApiProperties apiProperties) {
+                      AiApiProperties apiProperties,
+                      OCRService ocrService) {
         this.knowledgePointMapper = knowledgePointMapper;
         this.aiAgentService = aiAgentService;
         this.aiRestTemplate = aiRestTemplate;
         this.aiStreamRestTemplate = aiStreamRestTemplate;
         this.apiProperties = apiProperties;
         this.objectMapper = new ObjectMapper();
+        this.ocrService = ocrService;
     }
 
     /**
@@ -89,9 +97,50 @@ public class TutorAgent {
      * @return RAG + Tool Calling 增强的回答文本
      */
     public String answer(String question, String subject) {
-        log.info("TutorAgent 开始答疑 — question={}, subject={}", question, subject);
+        return answer(question, subject, null);
+    }
 
-        // 优先使用 Tool Calling 模式
+    /**
+     * 回答用户问题（支持图片，双轨制：多模态优先 + OCR 降级）。
+     *
+     * @param question 用户提问
+     * @param subject  限定学科
+     * @param imageUrl 图片URL（可选）
+     * @return 回答文本
+     */
+    public String answer(String question, String subject, String imageUrl) {
+        log.info("TutorAgent 开始答疑 — question={}, subject={}, hasImage={}", question, subject, imageUrl != null);
+
+        // 有图片时：双轨制
+        if (imageUrl != null && !imageUrl.isBlank()) {
+            // 轨道1：尝试多模态直接发图
+            try {
+                String result = answerWithMultimodal(question, subject, imageUrl);
+                if (result != null && !result.isBlank() && !result.startsWith("【AI")) {
+                    log.info("多模态路径成功 — question={}", question);
+                    return result;
+                }
+            } catch (Exception e) {
+                log.warn("多模态路径失败，降级为 OCR — {}", e.getMessage());
+            }
+
+            // 轨道2：OCR 降级
+            try {
+                String ocrText = performOcr(imageUrl, subject);
+                if (ocrText != null && !ocrText.isBlank()) {
+                    String enhancedQuestion = String.format(
+                            "【题目图片OCR识别内容】\n%s\n\n【学生问题】\n%s", ocrText, question);
+                    log.info("OCR 降级路径 — ocrTextLength={}", ocrText.length());
+                    return answerWithToolCalling(enhancedQuestion, subject);
+                }
+            } catch (Exception e) {
+                log.warn("OCR 降级也失败 — {}", e.getMessage());
+            }
+
+            return "【图片识别失败】无法识别图片内容，请尝试文字描述问题。";
+        }
+
+        // 无图片：原有逻辑
         try {
             return answerWithToolCalling(question, subject);
         } catch (Exception e) {
@@ -109,14 +158,61 @@ public class TutorAgent {
      * @param onChunk  每收到一个文本片段时的回调
      */
     public void answerStream(String question, String subject, Consumer<String> onChunk) {
-        log.info("TutorAgent 流式答疑 — question={}, subject={}", question, subject);
+        answerStream(question, subject, null, onChunk);
+    }
 
+    /**
+     * 流式回答用户问题（支持图片，双轨制）。
+     *
+     * @param question 用户提问
+     * @param subject  限定学科
+     * @param imageUrl 图片URL（可选）
+     * @param onChunk  每收到一个文本片段时的回调
+     */
+    public void answerStream(String question, String subject, String imageUrl, Consumer<String> onChunk) {
+        log.info("TutorAgent 流式答疑 — question={}, subject={}, hasImage={}", question, subject, imageUrl != null);
+
+        String effectiveQuestion = question;
+
+        // 有图片时：尝试多模态（非流式），失败则 OCR 降级
+        if (imageUrl != null && !imageUrl.isBlank()) {
+            // 轨道1：多模态非流式调用，拿到完整结果后分段推送
+            try {
+                String multimodalResult = answerWithMultimodal(question, subject, imageUrl);
+                if (multimodalResult != null && !multimodalResult.isBlank() && !multimodalResult.startsWith("【AI")) {
+                    log.info("多模态路径成功 — question={}, length={}", question, multimodalResult.length());
+                    // 分段发送，避免单次 JSON 过大导致 SSE 断裂
+                    int chunkSize = 200;
+                    for (int i = 0; i < multimodalResult.length(); i += chunkSize) {
+                        int end = Math.min(i + chunkSize, multimodalResult.length());
+                        onChunk.accept(multimodalResult.substring(i, end));
+                    }
+                    return;
+                }
+            } catch (Exception e) {
+                log.warn("多模态路径失败，降级为 OCR — {}", e.getMessage());
+            }
+
+            // 轨道2：OCR 降级
+            try {
+                String ocrText = performOcr(imageUrl, subject);
+                if (ocrText != null && !ocrText.isBlank()) {
+                    effectiveQuestion = String.format(
+                            "【题目图片OCR识别内容】\n%s\n\n【学生问题】\n%s", ocrText, question);
+                    log.info("OCR 降级流式路径 — ocrTextLength={}", ocrText.length());
+                }
+            } catch (Exception e) {
+                log.warn("OCR 降级也失败，使用原始问题 — {}", e.getMessage());
+            }
+        }
+
+        // 标准流式路径（无图片 或 OCR 降级后）
         // 先做 RAG 检索
-        List<String> keywords = extractKeywords(question);
+        List<String> keywords = extractKeywords(effectiveQuestion);
         List<KnowledgePoint> results = knowledgePointMapper.searchByKeywords(
                 keywords, subject, MAX_SEARCH_RESULTS);
         String context = buildContext(results);
-        String userMessage = String.format("【知识库参考内容】\n%s\n\n【学生问题】\n%s", context, question);
+        String userMessage = String.format("【知识库参考内容】\n%s\n\n【学生问题】\n%s", context, effectiveQuestion);
 
         // 构建流式请求
         Map<String, Object> requestBody = new HashMap<>();
@@ -192,6 +288,235 @@ public class TutorAgent {
      */
     public void clearHistory(Long userId) {
         aiAgentService.clearHistory(userId);
+    }
+
+    // ==================== 多模态 + OCR 双轨 ====================
+
+    /**
+     * 多模态非流式调用：将图片以 OpenAI vision 格式发送给模型。
+     *
+     * @return AI 回答文本，失败返回 null
+     */
+    private String answerWithMultimodal(String question, String subject, String imageUrl) throws Exception {
+        // RAG 检索
+        List<String> keywords = extractKeywords(question);
+        List<KnowledgePoint> results = knowledgePointMapper.searchByKeywords(
+                keywords, subject, MAX_SEARCH_RESULTS);
+        String context = buildContext(results);
+
+        String textPart = String.format(
+                "【知识库参考内容】\n%s\n\n【学生问题】\n%s", context, question);
+
+        // 将图片转为 base64 data URI（本地 URL 远程 API 无法访问）
+        String imageDataUri = imageUrlToBase64(imageUrl);
+        if (imageDataUri == null) {
+            log.warn("图片转 base64 失败，跳过多模态路径");
+            return null;
+        }
+        log.info("图片 base64 长度: {} 字符 (约 {} KB)", imageDataUri.length(), imageDataUri.length() * 3 / 4 / 1024);
+        List<Map<String, Object>> contentParts = new ArrayList<>();
+        contentParts.add(Map.of("type", "text", "text", textPart));
+        contentParts.add(Map.of("type", "image_url", "image_url", Map.of("url", imageDataUri)));
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("model", apiProperties.getModel());
+        requestBody.put("messages", List.of(
+                Map.of("role", "system", "content", SYSTEM_PROMPT),
+                Map.of("role", "user", "content", contentParts)
+        ));
+        requestBody.put("temperature", 0.7);
+        requestBody.put("max_tokens", 32768);
+        requestBody.put("reasoning_effort", "low");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(apiProperties.getKey());
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+        String response = aiRestTemplate.postForObject(
+                apiProperties.getEndpoint(), entity, String.class);
+        if (response == null) {
+            log.warn("多模态 API 返回 null");
+            return null;
+        }
+
+        log.info("多模态 API 响应 (前500字符): {}", response.substring(0, Math.min(500, response.length())));
+
+        JsonNode root = objectMapper.readTree(response);
+        // 检查是否有错误（模型不支持 vision 时会返回 error）
+        if (root.has("error")) {
+            String errorMsg = root.path("error").path("message").asText("unknown");
+            log.warn("多模态 API 返回错误 — {}", errorMsg);
+            return null;
+        }
+
+        JsonNode choices = root.path("choices");
+        if (choices.isEmpty() || choices.get(0) == null) {
+            log.warn("多模态 API 返回空 choices — response={}", response.substring(0, Math.min(300, response.length())));
+            return null;
+        }
+
+        JsonNode choice = choices.get(0);
+        JsonNode message = choice.path("message");
+        JsonNode content = message.path("content");
+        JsonNode finishReason = choice.path("finish_reason");
+        JsonNode usage = root.path("usage");
+
+        // 详细日志：finish_reason + usage + message 全结构
+        log.info("多模态 finish_reason={}, usage={}", finishReason.asText("N/A"), usage.toString());
+        log.info("多模态 message 完整结构: {}", message.toString());
+
+        if (content.isMissingNode() || content.isNull()) {
+            log.warn("多模态 API content 为空 — finish_reason={}", finishReason.asText("N/A"));
+            return null;
+        }
+
+        String result = content.asText("");
+        log.info("多模态 API 内容长度={}", result.length());
+        return result.isEmpty() ? null : result;
+    }
+
+    /**
+     * 多模态流式调用：将图片以 OpenAI vision 格式发送给模型。
+     *
+     * @return true 表示成功，false 表示模型不支持需降级
+     */
+    private boolean answerStreamWithMultimodal(String question, String subject,
+                                                String imageUrl, Consumer<String> onChunk) {
+        // RAG 检索
+        List<String> keywords = extractKeywords(question);
+        List<KnowledgePoint> results = knowledgePointMapper.searchByKeywords(
+                keywords, subject, MAX_SEARCH_RESULTS);
+        String context = buildContext(results);
+
+        String textPart = String.format(
+                "【知识库参考内容】\n%s\n\n【学生问题】\n%s", context, question);
+
+        // 将图片转为 base64 data URI
+        String imageDataUri = imageUrlToBase64(imageUrl);
+        if (imageDataUri == null) {
+            log.warn("图片转 base64 失败，跳过多模态流式路径");
+            return false;
+        }
+
+        List<Map<String, Object>> contentParts = new ArrayList<>();
+        contentParts.add(Map.of("type", "text", "text", textPart));
+        contentParts.add(Map.of("type", "image_url", "image_url", Map.of("url", imageDataUri)));
+
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("model", apiProperties.getModel());
+        requestBody.put("messages", List.of(
+                Map.of("role", "system", "content", SYSTEM_PROMPT),
+                Map.of("role", "user", "content", contentParts)
+        ));
+        requestBody.put("temperature", 0.7);
+        requestBody.put("max_tokens", 4096);
+        requestBody.put("stream", true);
+
+        final boolean[] hadError = {false};
+
+        try {
+            aiStreamRestTemplate.execute(
+                    apiProperties.getEndpoint(),
+                    org.springframework.http.HttpMethod.POST,
+                    request -> {
+                        request.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+                        request.getHeaders().setBearerAuth(apiProperties.getKey());
+                        objectMapper.writeValue(request.getBody(), requestBody);
+                    },
+                    response -> {
+                        try (InputStream is = response.getBody();
+                             BufferedReader reader = new BufferedReader(
+                                     new InputStreamReader(is, StandardCharsets.UTF_8))) {
+
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                if (line.isBlank()) continue;
+                                if (!line.startsWith("data: ")) continue;
+
+                                String data = line.substring(6).trim();
+                                if ("[DONE]".equals(data)) break;
+
+                                try {
+                                    JsonNode node = objectMapper.readTree(data);
+                                    // 检查 error（某些 API 在流式中返回 error chunk）
+                                    if (node.has("error")) {
+                                        hadError[0] = true;
+                                        log.warn("多模态流式 API 返回错误 — {}",
+                                                node.path("error").path("message").asText());
+                                        return null;
+                                    }
+                                    String delta = node.path("choices").get(0)
+                                            .path("delta").path("content").asText("");
+                                    if (!delta.isEmpty()) {
+                                        onChunk.accept(delta);
+                                    }
+                                } catch (Exception parseEx) {
+                                    log.debug("SSE 解析跳过 — data={}", data);
+                                }
+                            }
+                        } catch (Exception e) {
+                            hadError[0] = true;
+                            log.error("多模态 SSE 流读取异常", e);
+                        }
+                        return null;
+                    });
+        } catch (Exception e) {
+            log.warn("多模态流式调用异常 — {}", e.getMessage());
+            return false;
+        }
+
+        return !hadError[0];
+    }
+
+    /**
+     * 调用 OCR 服务识别图片文字。
+     */
+    private String performOcr(String imageUrl, String subject) {
+        try {
+            OCRResultVO result = ocrService.recognize(imageUrl, subject);
+            return result.getText();
+        } catch (Exception e) {
+            log.error("OCR 识别失败 — imageUrl={}", imageUrl, e);
+            return null;
+        }
+    }
+
+    /**
+     * 将图片URL转为 base64 data URI（供多模态 API 使用）。
+     * 支持本地文件路径（/uploads/...）和 http URL。
+     */
+    private String imageUrlToBase64(String imageUrl) {
+        try {
+            byte[] imageBytes;
+            if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+                // 远程 URL：通过 RestTemplate 下载
+                imageBytes = aiRestTemplate.getForObject(imageUrl, byte[].class);
+                if (imageBytes == null) return null;
+            } else {
+                // 本地路径：/uploads/images/202606/xxx.jpg → ./uploads/images/202606/xxx.jpg
+                String relativePath = imageUrl.startsWith("/uploads/") ? imageUrl.substring(1) : imageUrl;
+                Path filePath = Path.of(relativePath);
+                if (!Files.exists(filePath)) {
+                    log.warn("图片文件不存在 — {}", filePath);
+                    return null;
+                }
+                imageBytes = Files.readAllBytes(filePath);
+            }
+
+            // 推断 MIME 类型
+            String mime = "image/jpeg"; // 默认
+            String lower = imageUrl.toLowerCase();
+            if (lower.endsWith(".png")) mime = "image/png";
+            else if (lower.endsWith(".gif")) mime = "image/gif";
+            else if (lower.endsWith(".webp")) mime = "image/webp";
+
+            String base64 = Base64.getEncoder().encodeToString(imageBytes);
+            return "data:" + mime + ";base64," + base64;
+        } catch (Exception e) {
+            log.error("图片转 base64 失败 — imageUrl={}", imageUrl, e);
+            return null;
+        }
     }
 
     // ==================== Tool Calling 模式 ====================

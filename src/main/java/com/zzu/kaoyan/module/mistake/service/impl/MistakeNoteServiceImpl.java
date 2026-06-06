@@ -8,6 +8,7 @@ import com.zzu.kaoyan.common.result.ResultCode;
 import com.zzu.kaoyan.common.util.MarkdownRenderUtil;
 import com.zzu.kaoyan.module.mistake.entity.dto.MistakeNoteCreateDTO;
 import com.zzu.kaoyan.module.mistake.entity.dto.MistakeNoteUpdateDTO;
+import com.zzu.kaoyan.module.mistake.entity.dto.QuickSaveDTO;
 import com.zzu.kaoyan.module.mistake.entity.po.DailyPlanPO;
 import com.zzu.kaoyan.module.mistake.entity.po.MistakeNotePO;
 import com.zzu.kaoyan.module.mistake.entity.po.ReviewLogPO;
@@ -467,6 +468,59 @@ public class MistakeNoteServiceImpl implements MistakeNoteService {
             throw new BusinessException(ResultCode.FORBIDDEN.getCode(), "无权操作此错题");
         }
         return note;
+    }
+
+    // ==================== AI 对话快速收藏 ====================
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> quickSave(QuickSaveDTO dto, Long userId) {
+        // 1. 检查是否已有收藏（基于 chatMessageIds）
+        List<Long> existingIds = checkSaved(dto.getChatMessageIds(), userId);
+        if (!existingIds.isEmpty()) {
+            return Map.of("saved", false, "duplicateIds", existingIds);
+        }
+
+        // 2. 创建错题
+        MistakeNotePO note = new MistakeNotePO();
+        note.setUserId(userId);
+        note.setSubject(dto.getSubject());
+        note.setQuestionContent(dto.getQuestionContent());
+        note.setAnswer(dto.getAnswer());
+        note.setImageUrl(dto.getImageUrl());
+        note.setSourceType(dto.getSourceType() != null ? dto.getSourceType() : "AI_CHAT");
+        // chatMessageId 记录最后一条选中的消息ID
+        Long lastMsgId = dto.getChatMessageIds().get(dto.getChatMessageIds().size() - 1);
+        note.setChatMessageId(lastMsgId);
+        note.setSource("AI答疑");
+        note.setReviewStage(0);
+        note.setReviewCount(0);
+        note.setMasteryLevel(0);
+        note.setNextReviewDate(LocalDate.now().plusDays(1));
+        note.setIsDeleted(0);
+        note.setCreatedAt(LocalDateTime.now());
+        note.setUpdatedAt(LocalDateTime.now());
+        mistakeNoteMapper.insert(note);
+
+        log.info("AI快速收藏成功 — userId={}, noteId={}, chatMessageIds={}", userId, note.getId(), dto.getChatMessageIds());
+        return Map.of("saved", true, "noteId", note.getId());
+    }
+
+    @Override
+    public List<Long> checkSaved(List<Long> chatMessageIds, Long userId) {
+        if (chatMessageIds == null || chatMessageIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        // 查询该用户已收藏的消息ID
+        List<MistakeNotePO> existing = mistakeNoteMapper.selectList(
+                new LambdaQueryWrapper<MistakeNotePO>()
+                        .eq(MistakeNotePO::getUserId, userId)
+                        .eq(MistakeNotePO::getIsDeleted, 0)
+                        .in(MistakeNotePO::getChatMessageId, chatMessageIds));
+        return existing.stream()
+                .map(MistakeNotePO::getChatMessageId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
     }
 
     private MistakeNoteVO toVO(MistakeNotePO note, boolean renderHtml) {

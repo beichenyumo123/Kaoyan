@@ -20,5 +20,7 @@ public class AiChatMessage {
 
     private String content;
 
+    private String imageUrl;
+
     private LocalDateTime createdAt;
 }

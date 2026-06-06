@@ -3,9 +3,12 @@ package com.zzu.kaoyan.module.mistake.service;
 import com.github.pagehelper.PageInfo;
 import com.zzu.kaoyan.module.mistake.entity.dto.MistakeNoteCreateDTO;
 import com.zzu.kaoyan.module.mistake.entity.dto.MistakeNoteUpdateDTO;
+import com.zzu.kaoyan.module.mistake.entity.dto.QuickSaveDTO;
 import com.zzu.kaoyan.module.mistake.entity.vo.*;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 
 public interface MistakeNoteService {
 
@@ -58,4 +61,16 @@ public interface MistakeNoteService {
      * 获取艾宾浩斯遗忘曲线统计
      */
     EbbinghausStatsVO getEbbinghausStats(Long userId, int days);
+
+    /**
+     * 从 AI 对话快速收藏错题
+     * @return Map: saved=true/false, noteId(可选), duplicateIds(如有重复)
+     */
+    Map<String, Object> quickSave(QuickSaveDTO dto, Long userId);
+
+    /**
+     * 批量检查 AI 消息是否已被收藏
+     * @return 已收藏的消息ID列表
+     */
+    List<Long> checkSaved(List<Long> chatMessageIds, Long userId);
 }
