@@ -29,7 +29,7 @@ public class UploadController {
     private static final Logger log = LoggerFactory.getLogger(UploadController.class);
 
     private static final Set<String> IMAGE_EXTS = Set.of("jpg", "jpeg", "png", "gif", "webp");
-    private static final Set<String> VIDEO_EXTS = Set.of("mp4", "webm");
+    private static final Set<String> VIDEO_EXTS = Set.of("mp4", "webm", "mov", "avi");
 
     @Value("${app.upload.path}")
     private String uploadPath;
@@ -84,7 +84,11 @@ public class UploadController {
 
         String ext = getExtension(file.getOriginalFilename());
         if (ext == null || !VIDEO_EXTS.contains(ext)) {
-            return Result.error(400, "视频格式不支持，允许: mp4, webm");
+            return Result.error(400, "视频格式不支持，允许: mp4, webm, mov, avi");
+        }
+
+        if (!isVideoMagicMatch(file, ext)) {
+            return Result.error(400, "文件内容与扩展名不匹配");
         }
 
         try {
@@ -132,6 +136,31 @@ public class UploadController {
             if ("webp".equals(ext) && read >= 12) {
                 return header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F'
                         && header[8] == 'W' && header[9] == 'E' && header[10] == 'B' && header[11] == 'P';
+            }
+        } catch (IOException ignored) {
+        }
+        return false;
+    }
+
+    private boolean isVideoMagicMatch(MultipartFile file, String ext) {
+        try (InputStream in = file.getInputStream()) {
+            byte[] header = new byte[12];
+            int read = in.read(header);
+            if (read < 12) return false;
+
+            // MP4 / MOV: offset 4 = "ftyp"
+            if (Set.of("mp4", "mov").contains(ext)) {
+                return header[4] == 'f' && header[5] == 't' && header[6] == 'y' && header[7] == 'p';
+            }
+            // WEBM: 1A 45 DF A3 (EBML)
+            if ("webm".equals(ext)) {
+                return (header[0] & 0xFF) == 0x1A && (header[1] & 0xFF) == 0x45
+                        && (header[2] & 0xFF) == 0xDF && (header[3] & 0xFF) == 0xA3;
+            }
+            // AVI: "RIFF" + "AVI " at offset 8
+            if ("avi".equals(ext)) {
+                return header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F'
+                        && header[8] == 'A' && header[9] == 'V' && header[10] == 'I' && header[11] == ' ';
             }
         } catch (IOException ignored) {
         }

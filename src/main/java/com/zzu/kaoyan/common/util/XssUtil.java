@@ -14,9 +14,16 @@ public class XssUtil {
      * 富文本白名单 - 允许的 HTML 标签和属性
      */
     private static final Safelist RICH_TEXT_WHITELIST = Safelist.relaxed()
-            // 允许的标签已在 relaxed() 中包含，可按需添加
-            .addAttributes(":all", "style")  // 允许所有标签的 style 属性
-            .addProtocols("img", "src", "http", "https");  // 允许图片协议
+            // 允许 video + source 标签
+            .addTags("video", "source")
+            .addAttributes("video", "src", "controls", "width", "height", "poster", "autoplay", "loop", "muted", "playsinline")
+            .addAttributes("source", "src", "type")
+            .addProtocols("video", "src", "http", "https")
+            .addProtocols("source", "src", "http", "https")
+            // 允许所有标签的 style 属性
+            .addAttributes(":all", "style")
+            // 允许图片协议
+            .addProtocols("img", "src", "http", "https");
 
     /**
      * 纯文本白名单 - 移除所有 HTML 标签

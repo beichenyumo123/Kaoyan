@@ -19,11 +19,18 @@ import com.zzu.kaoyan.module.mistake.mapper.ReviewLogMapper;
 import com.zzu.kaoyan.module.mistake.service.EbbinghausService;
 import com.zzu.kaoyan.module.mistake.service.MistakeNoteService;
 import com.zzu.kaoyan.module.mistake.service.MistakeNotificationService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zzu.kaoyan.module.ai.config.AiApiProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -33,7 +40,6 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class MistakeNoteServiceImpl implements MistakeNoteService {
 
     private final MistakeNoteMapper mistakeNoteMapper;
@@ -41,6 +47,25 @@ public class MistakeNoteServiceImpl implements MistakeNoteService {
     private final DailyPlanMapper dailyPlanMapper;
     private final EbbinghausService ebbinghausService;
     private final MistakeNotificationService notificationService;
+    private final RestTemplate aiRestTemplate;
+    private final AiApiProperties aiApiProperties;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    public MistakeNoteServiceImpl(MistakeNoteMapper mistakeNoteMapper,
+                                  ReviewLogMapper reviewLogMapper,
+                                  DailyPlanMapper dailyPlanMapper,
+                                  EbbinghausService ebbinghausService,
+                                  MistakeNotificationService notificationService,
+                                  @org.springframework.beans.factory.annotation.Qualifier("aiRestTemplate") RestTemplate aiRestTemplate,
+                                  AiApiProperties aiApiProperties) {
+        this.mistakeNoteMapper = mistakeNoteMapper;
+        this.reviewLogMapper = reviewLogMapper;
+        this.dailyPlanMapper = dailyPlanMapper;
+        this.ebbinghausService = ebbinghausService;
+        this.notificationService = notificationService;
+        this.aiRestTemplate = aiRestTemplate;
+        this.aiApiProperties = aiApiProperties;
+    }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -495,6 +520,15 @@ public class MistakeNoteServiceImpl implements MistakeNoteService {
             note.setChatMessageId(msgIds.get(msgIds.size() - 1));
         }
         note.setSource("AI答疑");
+        // 自动提取知识点
+        if (dto.getKnowledgePoints() != null && !dto.getKnowledgePoints().isBlank()) {
+            note.setKnowledgePoints(dto.getKnowledgePoints());
+        } else {
+            String kp = extractKnowledgePoints(dto.getQuestionContent(), dto.getAnswer());
+            if (kp != null) {
+                note.setKnowledgePoints(kp);
+            }
+        }
         note.setReviewStage(0);
         note.setReviewCount(0);
         note.setMasteryLevel(0);
@@ -506,6 +540,56 @@ public class MistakeNoteServiceImpl implements MistakeNoteService {
 
         log.info("AI快速收藏成功 — userId={}, noteId={}, chatMessageIds={}", userId, note.getId(), dto.getChatMessageIds());
         return Map.of("saved", true, "noteId", note.getId());
+    }
+
+    /**
+     * 调用 LLM 从题目+答案中提取知识点，逗号分隔返回。
+     * 提取失败返回 null，不阻塞保存。
+     */
+    private String extractKnowledgePoints(String questionContent, String answer) {
+        if (aiApiProperties.getKey() == null || aiApiProperties.getKey().isBlank()) {
+            return null;
+        }
+        try {
+            String content = (questionContent != null ? questionContent : "") +
+                    (answer != null ? "\n解析：" + answer : "");
+            // 截断避免过长
+            if (content.length() > 1500) {
+                content = content.substring(0, 1500);
+            }
+
+            String prompt = "从以下考研题目中提取涉及的知识点名称（1-5个），用逗号分隔返回，不要有其他内容。\n\n" + content;
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("model", aiApiProperties.getModel());
+            body.put("messages", List.of(
+                    Map.of("role", "system", "content", "你是考研知识点提取助手。只返回知识点名称，逗号分隔，不要解释。"),
+                    Map.of("role", "user", "content", prompt)
+            ));
+            body.put("temperature", 0.1);
+            body.put("max_tokens", 100);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(aiApiProperties.getKey());
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+
+            String response = aiRestTemplate.postForObject(
+                    aiApiProperties.getEndpoint(), entity, String.class);
+            if (response == null) return null;
+
+            JsonNode root = objectMapper.readTree(response);
+            String result = root.path("choices").path(0).path("message").path("content").asText("").trim();
+            if (result.isBlank() || result.startsWith("【")) return null;
+
+            log.info("自动提取知识点 — question={}, result={}",
+                    questionContent != null && questionContent.length() > 30
+                            ? questionContent.substring(0, 30) + "..." : questionContent, result);
+            return result;
+        } catch (Exception e) {
+            log.warn("知识点自动提取失败，跳过 — {}", e.getMessage());
+            return null;
+        }
     }
 
     @Override

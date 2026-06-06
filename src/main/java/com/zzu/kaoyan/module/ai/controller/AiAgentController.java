@@ -192,7 +192,7 @@ public class AiAgentController {
         SessionInfo sessionInfo = ensureSession(userId, dto.getSessionId(), dto.getQuestion());
         saveMessage(sessionInfo.id, "user", dto.getQuestion(), dto.getImageUrl());
 
-        String answer = tutorAgent.answer(dto.getQuestion(), dto.getSubject(), dto.getImageUrl());
+        String answer = tutorAgent.answer(dto.getQuestion(), dto.getSubject(), dto.getImageUrl(), userId);
         saveMessage(sessionInfo.id, "assistant", answer, null);
 
         Map<String, String> data = new HashMap<>();
@@ -248,7 +248,7 @@ public class AiAgentController {
                     } catch (Exception e) {
                         log.warn("SSE 发送失败 — userId={}", userId, e);
                     }
-                });
+                }, userId);
                 // 流式完成后保存 AI 回复到数据库
                 saveMessage(sessionInfo.id, "assistant", fullAnswer.toString(), null);
                 emitter.complete();

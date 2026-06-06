@@ -34,4 +34,7 @@ public class QuickSaveDTO {
 
     @Schema(description = "来源类型", example = "AI_CHAT")
     private String sourceType;
+
+    @Schema(description = "知识点（逗号分隔，可选，不填则自动提取）")
+    private String knowledgePoints;
 }

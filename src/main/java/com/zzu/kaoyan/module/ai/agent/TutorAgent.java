@@ -8,6 +8,7 @@ import com.zzu.kaoyan.module.ai.entity.KnowledgePoint;
 import com.zzu.kaoyan.module.ai.mapper.AiKnowledgePointMapper;
 import com.zzu.kaoyan.module.ai.service.AiAgentService;
 import com.zzu.kaoyan.module.mistake.entity.vo.OCRResultVO;
+import com.zzu.kaoyan.module.mistake.mapper.MistakeNoteMapper;
 import com.zzu.kaoyan.module.mistake.service.OCRService;
 import org.slf4j.Logger;
 import java.nio.file.Files;
@@ -73,13 +74,15 @@ public class TutorAgent {
     private final AiApiProperties apiProperties;
     private final ObjectMapper objectMapper;
     private final OCRService ocrService;
+    private final MistakeNoteMapper mistakeNoteMapper;
 
     public TutorAgent(AiKnowledgePointMapper knowledgePointMapper,
                       AiAgentService aiAgentService,
                       RestTemplate aiRestTemplate,
                       @Qualifier("aiStreamRestTemplate") RestTemplate aiStreamRestTemplate,
                       AiApiProperties apiProperties,
-                      OCRService ocrService) {
+                      OCRService ocrService,
+                      MistakeNoteMapper mistakeNoteMapper) {
         this.knowledgePointMapper = knowledgePointMapper;
         this.aiAgentService = aiAgentService;
         this.aiRestTemplate = aiRestTemplate;
@@ -87,6 +90,51 @@ public class TutorAgent {
         this.apiProperties = apiProperties;
         this.objectMapper = new ObjectMapper();
         this.ocrService = ocrService;
+        this.mistakeNoteMapper = mistakeNoteMapper;
+    }
+
+    /**
+     * 根据用户错题历史，构建薄弱知识点上下文。
+     * 查询最近 30 条错题的 knowledgePoints，按出现频率聚合。
+     *
+     * @return 薄弱点文本，无错题时返回 null
+     */
+    private String buildWeaknessContext(Long userId, String subject) {
+        try {
+            List<Map<String, Object>> rows = mistakeNoteMapper.selectRecentKnowledgePoints(userId);
+            if (rows == null || rows.isEmpty()) return null;
+
+            // 统计每个知识点出现次数
+            Map<String, Integer> kpCount = new LinkedHashMap<>();
+            for (Map<String, Object> row : rows) {
+                String kp = (String) row.get("knowledge_points");
+                String rowSubject = (String) row.get("subject");
+                if (kp == null || kp.isBlank()) continue;
+                // 如果指定了学科，过滤
+                if (subject != null && !subject.isBlank() && !subject.equals(rowSubject)) continue;
+                for (String name : kp.split("[,，、\\s]+")) {
+                    name = name.trim();
+                    if (!name.isEmpty()) {
+                        kpCount.merge(name, 1, Integer::sum);
+                    }
+                }
+            }
+
+            if (kpCount.isEmpty()) return null;
+
+            // 按频率降序，取前 5 个
+            StringBuilder sb = new StringBuilder();
+            kpCount.entrySet().stream()
+                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+                    .limit(5)
+                    .forEach(e -> sb.append("- ").append(e.getKey())
+                            .append("（出错 ").append(e.getValue()).append(" 次）\n"));
+
+            return sb.toString().trim();
+        } catch (Exception e) {
+            log.warn("构建薄弱知识点上下文失败 — {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -97,7 +145,7 @@ public class TutorAgent {
      * @return RAG + Tool Calling 增强的回答文本
      */
     public String answer(String question, String subject) {
-        return answer(question, subject, null);
+        return answer(question, subject, null, null);
     }
 
     /**
@@ -109,13 +157,30 @@ public class TutorAgent {
      * @return 回答文本
      */
     public String answer(String question, String subject, String imageUrl) {
+        return answer(question, subject, imageUrl, null);
+    }
+
+    /**
+     * 回答用户问题（支持图片 + 用户画像）。
+     */
+    public String answer(String question, String subject, String imageUrl, Long userId) {
         log.info("TutorAgent 开始答疑 — question={}, subject={}, hasImage={}", question, subject, imageUrl != null);
+
+        // 构建动态 system prompt（注入薄弱知识点）
+        String systemPrompt = SYSTEM_PROMPT;
+        if (userId != null) {
+            String weakness = buildWeaknessContext(userId, subject);
+            if (weakness != null) {
+                systemPrompt = SYSTEM_PROMPT + "\n\n【用户薄弱知识点】\n" + weakness
+                        + "\n回答时注意强化这些关联，适当回顾基础概念。";
+            }
+        }
 
         // 有图片时：双轨制
         if (imageUrl != null && !imageUrl.isBlank()) {
             // 轨道1：尝试多模态直接发图
             try {
-                String result = answerWithMultimodal(question, subject, imageUrl);
+                String result = answerWithMultimodal(question, subject, imageUrl, systemPrompt);
                 if (result != null && !result.isBlank() && !result.startsWith("【AI")) {
                     log.info("多模态路径成功 — question={}", question);
                     return result;
@@ -131,7 +196,7 @@ public class TutorAgent {
                     String enhancedQuestion = String.format(
                             "【题目图片OCR识别内容】\n%s\n\n【学生问题】\n%s", ocrText, question);
                     log.info("OCR 降级路径 — ocrTextLength={}", ocrText.length());
-                    return answerWithToolCalling(enhancedQuestion, subject);
+                    return answerWithToolCalling(enhancedQuestion, subject, systemPrompt);
                 }
             } catch (Exception e) {
                 log.warn("OCR 降级也失败 — {}", e.getMessage());
@@ -142,10 +207,10 @@ public class TutorAgent {
 
         // 无图片：原有逻辑
         try {
-            return answerWithToolCalling(question, subject);
+            return answerWithToolCalling(question, subject, systemPrompt);
         } catch (Exception e) {
             log.warn("Tool Calling 失败，降级为 RAG 模式 — {}", e.getMessage());
-            return answerWithRag(question, subject);
+            return answerWithRag(question, subject, systemPrompt);
         }
     }
 
@@ -158,7 +223,7 @@ public class TutorAgent {
      * @param onChunk  每收到一个文本片段时的回调
      */
     public void answerStream(String question, String subject, Consumer<String> onChunk) {
-        answerStream(question, subject, null, onChunk);
+        answerStream(question, subject, null, onChunk, null);
     }
 
     /**
@@ -170,7 +235,21 @@ public class TutorAgent {
      * @param onChunk  每收到一个文本片段时的回调
      */
     public void answerStream(String question, String subject, String imageUrl, Consumer<String> onChunk) {
+        answerStream(question, subject, imageUrl, onChunk, null);
+    }
+
+    public void answerStream(String question, String subject, String imageUrl, Consumer<String> onChunk, Long userId) {
         log.info("TutorAgent 流式答疑 — question={}, subject={}, hasImage={}", question, subject, imageUrl != null);
+
+        // 构建动态 system prompt（注入薄弱知识点）
+        String systemPrompt = SYSTEM_PROMPT;
+        if (userId != null) {
+            String weakness = buildWeaknessContext(userId, subject);
+            if (weakness != null) {
+                systemPrompt = SYSTEM_PROMPT + "\n\n【用户薄弱知识点】\n" + weakness
+                        + "\n回答时注意强化这些关联，适当回顾基础概念。";
+            }
+        }
 
         String effectiveQuestion = question;
 
@@ -178,7 +257,7 @@ public class TutorAgent {
         if (imageUrl != null && !imageUrl.isBlank()) {
             // 轨道1：多模态流式调用，token 即到即推，前端无需等待完整响应
             try {
-                boolean ok = answerStreamWithMultimodal(question, subject, imageUrl, onChunk);
+                boolean ok = answerStreamWithMultimodal(question, subject, imageUrl, onChunk, systemPrompt);
                 if (ok) {
                     log.info("多模态流式路径成功 — question={}", question);
                     return;
@@ -212,7 +291,7 @@ public class TutorAgent {
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("model", apiProperties.getModel());
         requestBody.put("messages", List.of(
-                Map.of("role", "system", "content", SYSTEM_PROMPT),
+                Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user", "content", userMessage)
         ));
         requestBody.put("temperature", 0.7);
@@ -291,7 +370,7 @@ public class TutorAgent {
      *
      * @return AI 回答文本，失败返回 null
      */
-    private String answerWithMultimodal(String question, String subject, String imageUrl) throws Exception {
+    private String answerWithMultimodal(String question, String subject, String imageUrl, String systemPrompt) throws Exception {
         // RAG 检索
         List<String> keywords = extractKeywords(question);
         List<KnowledgePoint> results = knowledgePointMapper.searchByKeywords(
@@ -315,7 +394,7 @@ public class TutorAgent {
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("model", apiProperties.getModel());
         requestBody.put("messages", List.of(
-                Map.of("role", "system", "content", SYSTEM_PROMPT),
+                Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user", "content", contentParts)
         ));
         requestBody.put("temperature", 0.7);
@@ -376,7 +455,8 @@ public class TutorAgent {
      * @return true 表示成功，false 表示模型不支持需降级
      */
     private boolean answerStreamWithMultimodal(String question, String subject,
-                                                String imageUrl, Consumer<String> onChunk) {
+                                                String imageUrl, Consumer<String> onChunk,
+                                                String systemPrompt) {
         // RAG 检索
         List<String> keywords = extractKeywords(question);
         List<KnowledgePoint> results = knowledgePointMapper.searchByKeywords(
@@ -400,7 +480,7 @@ public class TutorAgent {
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("model", apiProperties.getModel());
         requestBody.put("messages", List.of(
-                Map.of("role", "system", "content", SYSTEM_PROMPT),
+                Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user", "content", contentParts)
         ));
         requestBody.put("temperature", 0.7);
@@ -515,9 +595,9 @@ public class TutorAgent {
 
     // ==================== Tool Calling 模式 ====================
 
-    private String answerWithToolCalling(String question, String subject) throws Exception {
+    private String answerWithToolCalling(String question, String subject, String systemPrompt) throws Exception {
         List<Map<String, Object>> messages = new ArrayList<>();
-        messages.add(Map.of("role", "system", "content", SYSTEM_PROMPT));
+        messages.add(Map.of("role", "system", "content", systemPrompt));
         messages.add(Map.of("role", "user", "content", question));
 
         List<Map<String, Object>> tools = buildToolDefinitions();
@@ -584,7 +664,7 @@ public class TutorAgent {
         }
 
         log.warn("Tool Calling 达到最大轮次，降级为 RAG");
-        return answerWithRag(question, subject);
+        return answerWithRag(question, subject, systemPrompt);
     }
 
     /**
@@ -648,7 +728,7 @@ public class TutorAgent {
 
     // ==================== RAG 模式（降级方案） ====================
 
-    private String answerWithRag(String question, String subject) {
+    private String answerWithRag(String question, String subject, String systemPrompt) {
         log.info("TutorAgent 使用 RAG 模式 — question={}", question);
 
         List<String> keywords = extractKeywords(question);
@@ -662,7 +742,7 @@ public class TutorAgent {
         Map<String, Object> requestBody = Map.of(
                 "model", apiProperties.getModel(),
                 "messages", List.of(
-                        Map.of("role", "system", "content", SYSTEM_PROMPT),
+                        Map.of("role", "system", "content", systemPrompt),
                         Map.of("role", "user", "content", userMessage)
                 ),
                 "temperature", 0.7,
