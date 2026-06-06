@@ -490,8 +490,10 @@ public class MistakeNoteServiceImpl implements MistakeNoteService {
         note.setImageUrl(dto.getImageUrl());
         note.setSourceType(dto.getSourceType() != null ? dto.getSourceType() : "AI_CHAT");
         // chatMessageId 记录最后一条选中的消息ID
-        Long lastMsgId = dto.getChatMessageIds().get(dto.getChatMessageIds().size() - 1);
-        note.setChatMessageId(lastMsgId);
+        List<Long> msgIds = dto.getChatMessageIds();
+        if (msgIds != null && !msgIds.isEmpty()) {
+            note.setChatMessageId(msgIds.get(msgIds.size() - 1));
+        }
         note.setSource("AI答疑");
         note.setReviewStage(0);
         note.setReviewCount(0);

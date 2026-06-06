@@ -9,7 +9,7 @@ import org.springframework.web.client.RestTemplate;
  * 通义千问 (DashScope) API 配置类
  * <p>
  * 使用 OpenAI 兼容接口：https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
- * 模型选择：qwen-plus（均衡）/ qwen-max（最强）/ qwen-turbo（最快）
+ * 模型选择：qwen3.7-plus / qwen-plus（均衡）/ qwen-max（最强）/ qwen-turbo（最快）
  */
 @Configuration
 public class QwenConfig {
@@ -27,7 +27,7 @@ public class QwenConfig {
     public String apiKey;
 
     /** 模型名称 */
-    public static final String MODEL = "qwen-plus";
+    public static final String MODEL = "qwen3.7-plus";
 
     /** 默认温度 */
     public static final Double TEMPERATURE = 0.7;

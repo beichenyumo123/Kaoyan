@@ -174,23 +174,17 @@ public class TutorAgent {
 
         String effectiveQuestion = question;
 
-        // 有图片时：尝试多模态（非流式），失败则 OCR 降级
+        // 有图片时：流式多模态优先，失败则 OCR 降级
         if (imageUrl != null && !imageUrl.isBlank()) {
-            // 轨道1：多模态非流式调用，拿到完整结果后分段推送
+            // 轨道1：多模态流式调用，token 即到即推，前端无需等待完整响应
             try {
-                String multimodalResult = answerWithMultimodal(question, subject, imageUrl);
-                if (multimodalResult != null && !multimodalResult.isBlank() && !multimodalResult.startsWith("【AI")) {
-                    log.info("多模态路径成功 — question={}, length={}", question, multimodalResult.length());
-                    // 分段发送，避免单次 JSON 过大导致 SSE 断裂
-                    int chunkSize = 200;
-                    for (int i = 0; i < multimodalResult.length(); i += chunkSize) {
-                        int end = Math.min(i + chunkSize, multimodalResult.length());
-                        onChunk.accept(multimodalResult.substring(i, end));
-                    }
+                boolean ok = answerStreamWithMultimodal(question, subject, imageUrl, onChunk);
+                if (ok) {
+                    log.info("多模态流式路径成功 — question={}", question);
                     return;
                 }
             } catch (Exception e) {
-                log.warn("多模态路径失败，降级为 OCR — {}", e.getMessage());
+                log.warn("多模态流式路径失败，降级为 OCR — {}", e.getMessage());
             }
 
             // 轨道2：OCR 降级

@@ -26,7 +26,7 @@ public class AiConfig {
     public RestTemplate aiRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(10_000);
-        factory.setReadTimeout(60_000);
+        factory.setReadTimeout(120_000);
         return new RestTemplate(factory);
     }
 
