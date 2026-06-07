@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,6 +28,7 @@ public class InterviewController {
 
     private final InterviewAiService interviewAiService;
     private final InterviewReportService interviewReportService;
+    private final com.zzu.kaoyan.module.interview.service.InterviewTtsService interviewTtsService;
     private final InterviewSessionMapper sessionMapper;
     private final com.zzu.kaoyan.module.interview.mapper.InterviewRecordMapper recordMapper;
 
@@ -123,6 +125,30 @@ public class InterviewController {
     }
 
     // ============================================================
+    // TTS 语音合成
+    // ============================================================
+
+    /**
+     * 将 AI 面试官的文本回复合成为 MP3 语音
+     */
+    @PostMapping("/tts")
+    @Operation(summary = "TTS语音合成")
+    public ResponseEntity<byte[]> synthesizeSpeech(
+            @RequestBody TtsRequestDTO dto) {
+        String interviewType = null;
+        if (dto.getSessionId() != null) {
+            var session = sessionMapper.selectById(dto.getSessionId());
+            if (session != null) {
+                interviewType = session.getInterviewType();
+            }
+        }
+        byte[] audioBytes = interviewTtsService.synthesize(dto.getText(), interviewType);
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.parseMediaType("audio/mpeg"))
+                .body(audioBytes);
+    }
+
+    // ============================================================
     // 内部 DTO
     // ============================================================
 
@@ -162,5 +188,13 @@ public class InterviewController {
     public static class FinishDTO {
         /** 视频模式下的仪态汇总数据，非视频模式为 null */
         private java.util.Map<String, Object> demeanorSummary;
+    }
+
+    @lombok.Data
+    public static class TtsRequestDTO {
+        /** 可选，传入后可自动选择中文/英文语音 */
+        private Long sessionId;
+        /** 待合成的文本 */
+        private String text;
     }
 }

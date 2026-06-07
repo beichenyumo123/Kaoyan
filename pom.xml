@@ -129,6 +129,13 @@
 			<scope>provided</scope>
 		</dependency>
 
+		<!-- DashScope Java SDK（语音合成 TTS） -->
+		<dependency>
+			<groupId>com.alibaba</groupId>
+			<artifactId>dashscope-sdk-java</artifactId>
+			<version>2.22.6</version>
+		</dependency>
+
 		<!-- Test -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

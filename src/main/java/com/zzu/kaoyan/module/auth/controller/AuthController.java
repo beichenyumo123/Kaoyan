@@ -15,6 +15,7 @@ import com.zzu.kaoyan.module.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -31,7 +32,8 @@ public class AuthController {
     private final AuthService authService;
     private final StringRedisTemplate stringRedisTemplate;
 
-    public AuthController(AuthService authService, StringRedisTemplate stringRedisTemplate) {
+    public AuthController(AuthService authService,
+                          @Autowired(required = false) StringRedisTemplate stringRedisTemplate) {
         this.authService = authService;
         this.stringRedisTemplate = stringRedisTemplate;
     }
@@ -45,7 +47,11 @@ public class AuthController {
         String uuid = IdUtil.fastSimpleUUID();
         String redisKey = "captcha:" + uuid;
 
-        stringRedisTemplate.opsForValue().set(redisKey, captcha.getCode(), 2, TimeUnit.MINUTES);
+        if (stringRedisTemplate != null) {
+            stringRedisTemplate.opsForValue().set(redisKey, captcha.getCode(), 2, TimeUnit.MINUTES);
+        } else {
+            log.warn("Redis 不可用，验证码将无法校验");
+        }
 
         Map<String, String> result = new HashMap<>();
         result.put("uuid", uuid);
@@ -108,6 +114,10 @@ public class AuthController {
      * 校验图形验证码，校验通过后删除 Redis 中的验证码（一次性使用）
      */
     private void validateCaptcha(String captchaCode, String captchaUuid) {
+        if (stringRedisTemplate == null) {
+            log.warn("Redis 不可用，跳过验证码校验");
+            return;
+        }
         String redisKey = "captcha:" + captchaUuid;
         String redisCode = stringRedisTemplate.opsForValue().get(redisKey);
         if (redisCode == null || !redisCode.equalsIgnoreCase(captchaCode)) {
