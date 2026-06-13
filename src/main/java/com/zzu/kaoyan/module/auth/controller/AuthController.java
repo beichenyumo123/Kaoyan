@@ -12,6 +12,7 @@ import com.zzu.kaoyan.module.auth.entity.LoginDTO;
 import com.zzu.kaoyan.module.auth.entity.LoginVO;
 import com.zzu.kaoyan.module.auth.entity.RegisterDTO;
 import com.zzu.kaoyan.module.auth.service.AuthService;
+import com.zzu.kaoyan.module.membership.service.MembershipService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
@@ -31,11 +32,14 @@ import java.util.concurrent.TimeUnit;
 public class AuthController {
     private final AuthService authService;
     private final StringRedisTemplate stringRedisTemplate;
+    private final MembershipService membershipService;
 
     public AuthController(AuthService authService,
-                          @Autowired(required = false) StringRedisTemplate stringRedisTemplate) {
+                          @Autowired(required = false) StringRedisTemplate stringRedisTemplate,
+                          @Autowired(required = false) MembershipService membershipService) {
         this.authService = authService;
         this.stringRedisTemplate = stringRedisTemplate;
+        this.membershipService = membershipService;
     }
 
     @Operation(summary = "获取图形验证码", description = "生成4位验证码图片，返回 base64 和 uuid")
@@ -77,6 +81,11 @@ public class AuthController {
 
         log.info("注册成功并自动登录！{},{}", loginVO.getUserId(), loginVO.getUsername());
 
+        // 预热会员缓存
+        if (membershipService != null) {
+            try { membershipService.warmCache(user.getId()); } catch (Exception ignored) {}
+        }
+
         return Result.success(loginVO);
     }
 
@@ -97,6 +106,11 @@ public class AuthController {
         loginVO.setAvatarUrl(user.getAvatarUrl());
 
         log.info("登录成功！{},{}",loginVO.getUserId(),loginVO.getUsername());
+
+        // 预热会员缓存
+        if (membershipService != null) {
+            try { membershipService.warmCache(user.getId()); } catch (Exception ignored) {}
+        }
 
         return Result.success(loginVO);
     }

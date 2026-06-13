@@ -2,6 +2,7 @@ package com.zzu.kaoyan.module.mistake.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.github.pagehelper.PageInfo;
+import com.zzu.kaoyan.common.annotation.MembershipRequired;
 import com.zzu.kaoyan.common.result.Result;
 import com.zzu.kaoyan.module.mistake.entity.dto.MarkdownRenderRequestDTO;
 import com.zzu.kaoyan.module.mistake.entity.dto.MistakeNoteCreateDTO;
@@ -46,6 +47,7 @@ public class MistakeNoteController {
             description = "上传题目图片URL（先调 /api/upload/image 上传获取），返回OCR识别的文字内容和建议的科目/知识点。使用PaddleOCR引擎，对中文数学公式支持较好。"
     )
     @PostMapping("/ocr")
+    @MembershipRequired("ocr")
     public Result<OCRResultVO> ocr(
             @Parameter(description = "图片URL，来自上传接口返回", required = true, example = "/uploads/images/202605/abc123.jpg")
             @RequestParam String imageUrl,
@@ -193,6 +195,7 @@ public class MistakeNoteController {
             description = "返回阶段分布（柱状图）、每日准确率趋势（折线图）、掌握度分布（饼图）"
     )
     @GetMapping("/stats/ebbinghaus")
+    @MembershipRequired("ebbinghaus_stats")
     public Result<EbbinghausStatsVO> ebbinghausStats(
             @Parameter(description = "准确率趋势统计天数，默认30天", example = "30")
             @RequestParam(defaultValue = "30") int days) {
@@ -202,6 +205,7 @@ public class MistakeNoteController {
 
     @Operation(summary = "导出错题 PDF", description = "将选中的错题导出为 A4 PDF 文档，支持中文。")
     @PostMapping("/export/pdf")
+    @MembershipRequired("export_pdf")
     public void exportPdf(@Valid @RequestBody PdfExportRequestDTO dto,
                           HttpServletResponse response) throws IOException {
         Long userId = StpUtil.getLoginIdAsLong();

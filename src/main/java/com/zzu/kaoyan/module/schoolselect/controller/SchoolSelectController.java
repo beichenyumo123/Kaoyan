@@ -1,6 +1,7 @@
 package com.zzu.kaoyan.module.schoolselect.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.zzu.kaoyan.common.annotation.MembershipRequired;
 import com.zzu.kaoyan.common.result.Result;
 import com.zzu.kaoyan.module.schoolselect.entity.dto.RecommendationRequestDTO;
 import com.zzu.kaoyan.module.schoolselect.entity.po.SchoolInfo;
@@ -24,6 +25,7 @@ public class SchoolSelectController {
 
     @Operation(summary = "获取择校推荐")
     @PostMapping("/recommend")
+    @MembershipRequired("school_recommend")
     public Result<RecommendationResultVO> recommend(@Valid @RequestBody RecommendationRequestDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
         return Result.success(schoolSelectService.recommend(dto, userId));

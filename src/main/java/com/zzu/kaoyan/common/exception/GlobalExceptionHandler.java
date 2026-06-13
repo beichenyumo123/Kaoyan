@@ -29,6 +29,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 处理会员/配额异常，返回结构化信息（含 featureKey）
+     */
+    @ExceptionHandler(MembershipException.class)
+    public Result<Object> handleMembershipException(MembershipException e) {
+        log.info("会员拦截 — feature={}, message={}", e.getFeatureKey(), e.getMessage());
+        return Result.error(e.getCode(), e.getMessage(),
+                java.util.Map.of("featureKey", e.getFeatureKey()));
+    }
+
+    /**
      * 处理自定义的业务异常 (例如：密码错误、用户被封禁等)
      */
     @ExceptionHandler(BusinessException.class)

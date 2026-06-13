@@ -30,7 +30,6 @@ public class SaTokenConfig implements WebMvcConfigurer {
                                         "/api/auth/login",
                                         "/api/auth/register",
                                         "/api/auth/captcha",
-                                        "/api/interview/**",   // AI 模拟面试，测试阶段放行
                                     "/api/boards",
                                         "/api/ai/ask/stream",   // SSE 流式端点，内部手动校验
                                         "/api/school-select/schools",

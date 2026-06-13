@@ -1,6 +1,8 @@
 package com.zzu.kaoyan.module.interview.controller;
 
-import cn.dev33.satoken.annotation.SaIgnore;
+import cn.dev33.satoken.annotation.SaCheckLogin;
+import cn.dev33.satoken.stp.StpUtil;
+import com.zzu.kaoyan.common.annotation.MembershipRequired;
 import com.zzu.kaoyan.common.result.Result;
 import com.zzu.kaoyan.module.interview.entity.InterviewRecord;
 import com.zzu.kaoyan.module.interview.entity.InterviewSession;
@@ -23,6 +25,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/interview")
 @RequiredArgsConstructor
+@SaCheckLogin
 @Tag(name = "AI模拟复试官")
 public class InterviewController {
 
@@ -41,15 +44,9 @@ public class InterviewController {
      */
     @PostMapping("/session/create")
     @Operation(summary = "创建面试会话")
+    @MembershipRequired("interview")
     public Result<InterviewSession> createSession(@RequestBody CreateSessionDTO dto) {
-        // 尝试从登录态获取用户ID，未登录时使用请求中的 userId 或默认值 1
-        Long userId = getCurrentUserId();
-        if (userId == null && dto.getUserId() != null) {
-            userId = dto.getUserId();
-        }
-        if (userId == null) {
-            userId = 1L; // 开发/测试阶段的默认用户ID
-        }
+        Long userId = StpUtil.getLoginIdAsLong();
 
         InterviewSession session = new InterviewSession();
         session.setUserId(userId);
@@ -133,6 +130,7 @@ public class InterviewController {
      */
     @PostMapping("/tts")
     @Operation(summary = "TTS语音合成")
+    @MembershipRequired("interview_tts")
     public ResponseEntity<byte[]> synthesizeSpeech(
             @RequestBody TtsRequestDTO dto) {
         String interviewType = null;
@@ -154,25 +152,9 @@ public class InterviewController {
 
     @lombok.Data
     public static class CreateSessionDTO {
-        private Long userId;          // 可选，未登录时手动指定
         private String targetSchool;
         private String targetMajor;
         private String interviewType;
-    }
-
-    // ============================================================
-    // 私有辅助方法
-    // ============================================================
-
-    /**
-     * 安全获取当前登录用户ID，未登录时返回 null
-     */
-    private Long getCurrentUserId() {
-        try {
-            return cn.dev33.satoken.stp.StpUtil.getLoginIdAsLong();
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     @lombok.Data

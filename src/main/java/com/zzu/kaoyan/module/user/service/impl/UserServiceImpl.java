@@ -8,6 +8,7 @@ import com.zzu.kaoyan.common.result.ResultCode;
 import com.zzu.kaoyan.mapper.UserMapper;
 import com.zzu.kaoyan.module.certification.entity.UserVerification;
 import com.zzu.kaoyan.module.certification.mapper.UserVerificationMapper;
+import com.zzu.kaoyan.module.membership.service.MembershipService;
 import com.zzu.kaoyan.module.user.dto.UserUpdateDTO;
 import com.zzu.kaoyan.module.user.dto.UserVO;
 import com.zzu.kaoyan.module.user.service.UserService;
@@ -19,10 +20,14 @@ public class UserServiceImpl implements UserService {
 
     private final UserMapper userMapper;
     private final UserVerificationMapper userVerificationMapper;
+    private final MembershipService membershipService;
 
-    public UserServiceImpl(UserMapper userMapper, UserVerificationMapper userVerificationMapper) {
+    public UserServiceImpl(UserMapper userMapper,
+                           UserVerificationMapper userVerificationMapper,
+                           MembershipService membershipService) {
         this.userMapper = userMapper;
         this.userVerificationMapper = userVerificationMapper;
+        this.membershipService = membershipService;
     }
 
     @Override
@@ -50,6 +55,14 @@ public class UserServiceImpl implements UserService {
                 vo.setVerifiedSchool(verification.getTargetSchool());
                 vo.setVerifiedMajor(verification.getTargetMajor());
             }
+        }
+
+        // 5. 查询会员信息
+        try {
+            vo.setMembership(membershipService.getCurrentMembership(userId));
+        } catch (Exception e) {
+            // 会员信息查询失败不影响主流程
+            vo.setMembership(null);
         }
 
         return vo;

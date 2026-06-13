@@ -3,6 +3,7 @@ package com.zzu.kaoyan.module.ai.controller;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zzu.kaoyan.common.annotation.MembershipRequired;
 import com.zzu.kaoyan.common.result.Result;
 import com.zzu.kaoyan.module.ai.agent.ReviewAgent;
 import com.zzu.kaoyan.module.ai.agent.SupervisorAgent;
@@ -23,6 +24,7 @@ import com.zzu.kaoyan.module.activity.entity.po.UserStudyPO;
 import com.zzu.kaoyan.module.activity.mapper.UserStudyMapper;
 import com.zzu.kaoyan.module.ai.vo.AiTaskVO;
 import com.zzu.kaoyan.module.ai.vo.InterventionVO;
+import com.zzu.kaoyan.module.membership.service.MembershipService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -60,6 +62,7 @@ public class AiAgentController {
     private final TutorAgent tutorAgent;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final MembershipService membershipService;
 
     public AiAgentController(AiDailyTaskMapper taskMapper,
                              AiInterventionLogMapper interventionMapper,
@@ -74,7 +77,8 @@ public class AiAgentController {
                              SupervisorAgent supervisorAgent,
                              TutorAgent tutorAgent,
                              ApplicationEventPublisher eventPublisher,
-                             ObjectMapper objectMapper) {
+                             ObjectMapper objectMapper,
+                             MembershipService membershipService) {
         this.taskMapper = taskMapper;
         this.interventionMapper = interventionMapper;
         this.knowledgePointMapper = knowledgePointMapper;
@@ -89,6 +93,7 @@ public class AiAgentController {
         this.tutorAgent = tutorAgent;
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
+        this.membershipService = membershipService;
     }
 
     // ==================== 1. AI 任务 ====================
@@ -184,6 +189,7 @@ public class AiAgentController {
     @Operation(summary = "向答疑 Agent 提问（RAG 知识库增强）")
     @PostMapping("/ask")
     @SaCheckLogin
+    @MembershipRequired("ai_ask")
     public Result<Map<String, String>> askQuestion(@RequestBody @Valid AiAskDTO dto) {
         Long userId = StpUtil.getLoginIdAsLong();
         log.info("用户提问 — userId={}, question={}", userId, dto.getQuestion());
@@ -228,6 +234,18 @@ public class AiAgentController {
         }
         log.info("用户流式提问 — userId={}, question={}", userId, dto.getQuestion());
 
+        // 会员配额预检（在异步之前，Redis Lua 原子预扣）
+        boolean quotaConsumed = membershipService.tryConsume(userId, "ai_ask");
+        if (!quotaConsumed) {
+            try {
+                emitter.send(SseEmitter.event()
+                        .name("error")
+                        .data("{\"code\":402,\"featureKey\":\"ai_ask\",\"message\":\"今日免费次数已用完，明日重置或升级VIP享100次/天\"}"));
+            } catch (Exception ignored) {}
+            emitter.complete();
+            return emitter;
+        }
+
         // 处理会话（在同步线程中完成，避免异步上下文丢失）
         SessionInfo sessionInfo = ensureSession(userId, dto.getSessionId(), dto.getQuestion());
         saveMessage(sessionInfo.id, "user", dto.getQuestion(), dto.getImageUrl());
@@ -251,9 +269,13 @@ public class AiAgentController {
                 }, userId);
                 // 流式完成后保存 AI 回复到数据库
                 saveMessage(sessionInfo.id, "assistant", fullAnswer.toString(), null);
+                // 记录 MySQL 使用日志（Redis 已预扣，这里做持久化）
+                membershipService.recordUsage(userId, "ai_ask");
                 emitter.complete();
             } catch (Exception e) {
                 log.error("SSE 流式答疑失败 — userId={}", userId, e);
+                // 退款配额（AI 调用失败，不应扣用户次数）
+                membershipService.refundUsage(userId, "ai_ask");
                 // 即使失败也保存已有的部分回复
                 if (fullAnswer.length() > 0) {
                     saveMessage(sessionInfo.id, "assistant", fullAnswer.toString(), null);
@@ -288,6 +310,7 @@ public class AiAgentController {
     @Operation(summary = "搜索知识点")
     @GetMapping("/knowledge")
     @SaCheckLogin
+    @MembershipRequired("ai_knowledge")
     public Result<List<KnowledgePoint>> searchKnowledge(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String subject) {
@@ -529,6 +552,7 @@ public class AiAgentController {
     @Operation(summary = "获取历史周报列表")
     @GetMapping("/report/history")
     @SaCheckLogin
+    @MembershipRequired("weekly_report")
     public Result<List<ReportHistoryVO>> getReportHistory(
             @RequestParam(defaultValue = "4") int limit) {
         Long userId = StpUtil.getLoginIdAsLong();
