@@ -1,5 +1,6 @@
 package com.zzu.kaoyan.module.mistake.entity.dto;
 
+import com.zzu.kaoyan.common.annotation.SkipXssClean;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
@@ -14,10 +15,12 @@ public class MistakeNoteCreateDTO {
     })
     private String subject;
 
+    @SkipXssClean  // Markdown 内容，不可经 Jsoup HTML 清洗
     @NotBlank(message = "题目内容不能为空")
     @Schema(description = "题目内容（OCR识别的文本或手动输入）", example = "在操作系统中，进程调度算法中，哪种算法可能产生饥饿现象？")
     private String questionContent;
 
+    @SkipXssClean  // Markdown 内容，不可经 Jsoup HTML 清洗
     @Schema(description = "答案与解析", example = "短作业优先(SJF)算法可能导致长作业长期得不到调度，产生饥饿现象。")
     private String answer;
 

@@ -1,5 +1,6 @@
 package com.zzu.kaoyan.module.mistake.entity.dto;
 
+import com.zzu.kaoyan.common.annotation.SkipXssClean;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -15,10 +16,12 @@ public class QuickSaveDTO {
     @Schema(description = "学科", example = "高等数学")
     private String subject;
 
+    @SkipXssClean  // Markdown 内容，不可经 Jsoup HTML 清洗，否则 \n 全丢
     @NotBlank(message = "题目内容不能为空")
     @Schema(description = "拼接后的题目内容")
     private String questionContent;
 
+    @SkipXssClean  // Markdown 内容，不可经 Jsoup HTML 清洗，否则 \n 全丢
     @Schema(description = "拼接后的解析/答案")
     private String answer;
 

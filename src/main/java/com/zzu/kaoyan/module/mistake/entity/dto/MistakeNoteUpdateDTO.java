@@ -1,5 +1,6 @@
 package com.zzu.kaoyan.module.mistake.entity.dto;
 
+import com.zzu.kaoyan.common.annotation.SkipXssClean;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -12,9 +13,11 @@ public class MistakeNoteUpdateDTO {
     @Schema(description = "错题ID", required = true)
     private Long id;
 
+    @SkipXssClean  // Markdown 内容，不可经 Jsoup HTML 清洗
     @Schema(description = "题目内容")
     private String questionContent;
 
+    @SkipXssClean  // Markdown 内容，不可经 Jsoup HTML 清洗
     @Schema(description = "答案与解析")
     private String answer;
 
