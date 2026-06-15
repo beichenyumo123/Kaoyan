@@ -10,7 +10,9 @@ public enum ResultCode {
     SYSTEM_ERROR(500, "服务器异常"),
     ALREADY_VERIFIED(400, "你已提交过认证申请"),
     VERIFICATION_PENDING(400, "你已有待审核的认证申请"),
-    NOT_VERIFIED(400, "你尚未通过上岸认证，通过认证后才能发布经验贴");
+    NOT_VERIFIED(400, "你尚未通过上岸认证，通过认证后才能发布经验贴"),
+    MEMBERSHIP_REQUIRED(402, "该功能需要VIP会员"),
+    QUOTA_EXHAUSTED(402, "今日免费次数已用完");
 
 
     private final Integer code;

@@ -32,4 +32,12 @@ public class RegisterDTO {
     // 使用正则校验手机号，允许为空（^$）或符合11位手机号规则
     @Pattern(regexp = "^$|^1[3-9]\\d{9}$", message = "手机号格式不正确")
     private String phone;
+
+    @NotBlank(message = "验证码不能为空")
+    @Schema(description = "验证码内容", example = "A3x9", requiredMode = Schema.RequiredMode.REQUIRED)
+    private String captchaCode;
+
+    @NotBlank(message = "验证码标识不能为空")
+    @Schema(description = "验证码UUID", example = "a1b2c3d4e5f6", requiredMode = Schema.RequiredMode.REQUIRED)
+    private String captchaUuid;
 }

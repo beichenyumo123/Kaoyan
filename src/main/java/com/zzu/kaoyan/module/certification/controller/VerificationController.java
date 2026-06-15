@@ -3,7 +3,9 @@ package com.zzu.kaoyan.module.certification.controller;
 import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.stp.StpUtil;
+import com.zzu.kaoyan.common.exception.BusinessException;
 import com.zzu.kaoyan.common.result.Result;
+import com.zzu.kaoyan.module.certification.dto.ReviewDTO;
 import com.zzu.kaoyan.module.certification.dto.VerificationSubmitDTO;
 import com.zzu.kaoyan.module.certification.service.VerificationService;
 import com.zzu.kaoyan.module.certification.vo.VerificationVO;
@@ -54,9 +56,16 @@ public class VerificationController {
     @SaCheckRole("ADMIN")
     public Result<VerificationVO> review(
             @PathVariable("id") Long verificationId,
-            @RequestParam Integer status,
-            @RequestParam(required = false) String comment) {
+            @RequestParam(required = false) Integer status,
+            @RequestParam(required = false) String comment,
+            @RequestBody(required = false) ReviewDTO dto) {
+        // 优先取 body，其次 query 参数
+        Integer finalStatus = (dto != null && dto.getStatus() != null) ? dto.getStatus() : status;
+        String finalComment = (dto != null && dto.getComment() != null) ? dto.getComment() : comment;
+        if (finalStatus == null) {
+            throw new BusinessException(400, "审核状态 status 不能为空（1=通过, 2=驳回）");
+        }
         Long adminId = StpUtil.getLoginIdAsLong();
-        return Result.success(verificationService.review(adminId, verificationId, status, comment));
+        return Result.success(verificationService.review(adminId, verificationId, finalStatus, finalComment));
     }
 }

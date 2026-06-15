@@ -9,6 +9,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 全局异常处理器
@@ -25,6 +26,16 @@ public class GlobalExceptionHandler {
     public Result<Void> handleNotLoginException(NotLoginException e) {
         log.warn("认证失败: {}", e.getMessage());
         return Result.error(ResultCode.UNAUTHORIZED);
+    }
+
+    /**
+     * 处理会员/配额异常，返回结构化信息（含 featureKey）
+     */
+    @ExceptionHandler(MembershipException.class)
+    public Result<Object> handleMembershipException(MembershipException e) {
+        log.info("会员拦截 — feature={}, message={}", e.getFeatureKey(), e.getMessage());
+        return Result.error(e.getCode(), e.getMessage(),
+                java.util.Map.of("featureKey", e.getFeatureKey()));
     }
 
     /**
@@ -55,6 +66,16 @@ public class GlobalExceptionHandler {
         }
         log.warn("参数校验异常: {}", errorMessage);
         return Result.error(ResultCode.PARAM_ERROR.getCode(), errorMessage);
+    }
+
+    /**
+     * 处理静态资源 404 (如 favicon.ico)，这类请求不经过 Controller，直接返回 404 即可
+     * 不需要打印堆栈，也不会被兜底 handler 误报为系统严重异常
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public Result<Void> handleNoResourceFound(NoResourceFoundException e) {
+        log.debug("静态资源未找到: {}", e.getMessage());
+        return Result.error(ResultCode.NOT_FOUND);
     }
 
     /**

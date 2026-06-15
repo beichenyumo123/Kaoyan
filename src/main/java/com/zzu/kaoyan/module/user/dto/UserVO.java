@@ -1,5 +1,6 @@
 package com.zzu.kaoyan.module.user.dto;
 
+import com.zzu.kaoyan.module.membership.dto.UserMembershipVO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -39,4 +40,7 @@ public class UserVO {
 
     @Schema(description = "认证录取专业（认证通过后可见）", example = "计算机技术")
     private String verifiedMajor;
+
+    @Schema(description = "会员状态与配额")
+    private UserMembershipVO membership;
 }

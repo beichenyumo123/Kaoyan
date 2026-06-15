@@ -4,6 +4,7 @@ import cn.dev33.satoken.annotation.SaCheckLogin;
 import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.dev33.satoken.stp.StpUtil;
 import com.zzu.kaoyan.common.result.Result;
+import com.zzu.kaoyan.module.experience.service.ExperienceService;
 import com.zzu.kaoyan.module.user.dto.UserUpdateDTO;
 import com.zzu.kaoyan.module.user.dto.UserVO;
 import com.zzu.kaoyan.module.user.service.UserService;
@@ -17,9 +18,11 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final ExperienceService experienceService;
 
-    public UserController(UserService userService) {
+    public UserController(UserService userService, ExperienceService experienceService) {
         this.userService = userService;
+        this.experienceService = experienceService;
     }
 
     /**
@@ -89,5 +92,14 @@ public class UserController {
         Long adminId = StpUtil.getLoginIdAsLong();
         userService.updateUserRole(adminId, userId, role);
         return Result.success();
+    }
+
+    @GetMapping("/{userId}/experiences")
+    @Operation(summary = "获取某用户的经验贴列表")
+    public Result<Object> getUserExperiences(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "10") int pageSize) {
+        return Result.success(experienceService.listByUserId(userId, pageNum, pageSize));
     }
 }

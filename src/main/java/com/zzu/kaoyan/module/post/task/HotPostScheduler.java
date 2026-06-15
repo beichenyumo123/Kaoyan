@@ -5,6 +5,8 @@ import com.zzu.kaoyan.module.post.entity.Post;
 import com.zzu.kaoyan.mapper.PostMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -14,6 +16,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 @Component
+@ConditionalOnBean(RedisConnectionFactory.class)
 public class HotPostScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(HotPostScheduler.class);

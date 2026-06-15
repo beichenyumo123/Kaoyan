@@ -6,5 +6,5 @@ import com.zzu.kaoyan.module.auth.entity.RegisterDTO;
 public interface AuthService {
     User verifyAccountAndPassword(String account,String password);
 
-    void register(RegisterDTO registerDTO);
+    User register(RegisterDTO registerDTO);
 }
