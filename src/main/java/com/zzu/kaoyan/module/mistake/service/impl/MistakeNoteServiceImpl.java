@@ -546,7 +546,7 @@ public class MistakeNoteServiceImpl implements MistakeNoteService {
         embeddingService.saveAsync(userId,
                 (dto.getQuestionContent() != null ? dto.getQuestionContent() : "")
                         + "\n" + (dto.getAnswer() != null ? dto.getAnswer().substring(0, Math.min(300, dto.getAnswer().length())) : ""),
-                "MISTAKE_NOTE", note.getId());
+                "MISTAKE_NOTE", note.getId(), dto.getSubject());
 
         log.info("AI快速收藏成功 — userId={}, noteId={}, chatMessageIds={}", userId, note.getId(), dto.getChatMessageIds());
         return Map.of("saved", true, "noteId", note.getId());

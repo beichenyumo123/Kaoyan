@@ -60,8 +60,9 @@ public class EmbeddingService {
      * @param content    原文（问题 + 回答摘要）
      * @param sourceType 来源类型（CHAT_QA / MISTAKE_NOTE）
      * @param sourceId   关联的原数据 ID
+     * @param subject    学科标签（用于过滤）
      */
-    public void saveAsync(Long userId, String content, String sourceType, Long sourceId) {
+    public void saveAsync(Long userId, String content, String sourceType, Long sourceId, String subject) {
         if (content == null || content.isBlank()) return;
         if (apiProperties.getKey() == null || apiProperties.getKey().isBlank()) {
             log.debug("未配置 API Key，跳过 embedding 存储");
@@ -76,6 +77,7 @@ public class EmbeddingService {
                 AiMemoryEmbedding entity = new AiMemoryEmbedding();
                 entity.setUserId(userId);
                 entity.setContent(content.length() > 500 ? content.substring(0, 500) : content);
+                entity.setSubject(subject);
                 entity.setEmbedding(toJson(embedding));
                 entity.setSourceType(sourceType);
                 entity.setSourceId(sourceId);
@@ -91,12 +93,14 @@ public class EmbeddingService {
 
     /**
      * 语义检索：根据当前问题，从用户历史记忆中找出最相似的 TOP-3。
+     * 同科目的记忆优先（subject 匹配时加权），不同科目的记忆降低权重。
      *
-     * @param userId 用户 ID
-     * @param query  当前问题文本
+     * @param userId  用户 ID
+     * @param query   当前问题文本
+     * @param subject 当前学科（可为 null，null 时不按学科过滤）
      * @return 相似历史文本列表（按相似度降序），无结果时返回空列表
      */
-    public List<String> search(Long userId, String query) {
+    public List<String> search(Long userId, String query, String subject) {
         if (query == null || query.isBlank()) return Collections.emptyList();
         if (apiProperties.getKey() == null || apiProperties.getKey().isBlank()) {
             return Collections.emptyList();
@@ -112,12 +116,12 @@ public class EmbeddingService {
                     new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AiMemoryEmbedding>()
                             .eq(AiMemoryEmbedding::getUserId, userId)
                             .orderByDesc(AiMemoryEmbedding::getCreatedAt)
-                            .last("LIMIT 200") // 最近 200 条，足够覆盖
+                            .last("LIMIT 200")
             );
 
             if (all.isEmpty()) return Collections.emptyList();
 
-            // 3. 计算余弦相似度，排序取 TOP-K
+            // 3. 计算余弦相似度，同科目加权 +0.1，排序取 TOP-K
             record Scored(String content, double score) {}
 
             return all.stream()
@@ -125,6 +129,14 @@ public class EmbeddingService {
                         float[] vec = parseEmbedding(e.getEmbedding());
                         if (vec == null) return null;
                         double sim = cosineSimilarity(queryVec, vec);
+                        // 同科目录每个关联，跨科目录个低关联
+                        if (subject != null && !subject.isBlank()
+                                && e.getSubject() != null && e.getSubject().equalsIgnoreCase(subject)) {
+                            sim += 0.15;  // 同科目加权
+                        } else if (subject != null && !subject.isBlank()
+                                && e.getSubject() != null && !e.getSubject().equalsIgnoreCase(subject)) {
+                            sim -= 0.10;  // 跨科目降权
+                        }
                         return new Scored(e.getContent(), sim);
                     })
                     .filter(s -> s != null && s.score >= SIMILARITY_THRESHOLD)

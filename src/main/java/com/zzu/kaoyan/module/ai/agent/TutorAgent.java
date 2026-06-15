@@ -185,13 +185,15 @@ public class TutorAgent {
                 systemPrompt += memory;
                 systemPrompt += "\n\n请根据以上学员档案，个性化调整回答——关联薄弱知识点、适配学习阶段、关注心理状态。";
             }
-            // 3. 语义记忆（用当前问题检索相似历史）
+            // 3. 语义记忆（用当前问题检索相似历史，同科目加权）
             if (question != null && !question.isBlank()) {
-                String semanticMemory = memoryService.enrichWithSemanticMemory(userId, question);
+                String semanticMemory = memoryService.enrichWithSemanticMemory(userId, question, subject);
                 if (!semanticMemory.isBlank()) {
                     systemPrompt += semanticMemory;
                 }
             }
+            // 4. 防止跨学科强行关联
+            systemPrompt += "\n\n⚠️ 注意：只关联与当前问题学科直接相关的薄弱知识点。如果某个薄弱点与当前问题分属不同学科（如数学题不应关联数据结构），不要强行建立联系。";
         }
 
         // 有图片时：双轨制
@@ -273,11 +275,12 @@ public class TutorAgent {
                 systemPrompt += "\n\n请根据以上学员档案，个性化调整回答——关联薄弱知识点、适配学习阶段、关注心理状态。";
             }
             if (question != null && !question.isBlank()) {
-                String semanticMemory = memoryService.enrichWithSemanticMemory(userId, question);
+                String semanticMemory = memoryService.enrichWithSemanticMemory(userId, question, subject);
                 if (!semanticMemory.isBlank()) {
                     systemPrompt += semanticMemory;
                 }
             }
+            systemPrompt += "\n\n⚠️ 注意：只关联与当前问题学科直接相关的薄弱知识点。如果某个薄弱点与当前问题分属不同学科（如数学题不应关联数据结构），不要强行建立联系。";
         }
 
         String effectiveQuestion = question;

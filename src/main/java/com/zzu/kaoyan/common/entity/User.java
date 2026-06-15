@@ -19,6 +19,7 @@ public class User {
     private String role;
     private String avatarUrl;
     private String targetMajor;
+    private String targetSchool;
     private Integer points;
     private Boolean isVerified;
 

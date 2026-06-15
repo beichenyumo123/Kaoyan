@@ -10,6 +10,10 @@ import com.zzu.kaoyan.module.activity.mapper.CheckInMapper;
 import com.zzu.kaoyan.module.activity.mapper.UserStudyMapper;
 import com.zzu.kaoyan.module.ai.entity.*;
 import com.zzu.kaoyan.module.ai.mapper.*;
+import com.zzu.kaoyan.module.interview.entity.*;
+import com.zzu.kaoyan.module.interview.mapper.*;
+import com.zzu.kaoyan.module.experience.entity.ExperiencePost;
+import com.zzu.kaoyan.module.experience.mapper.ExperiencePostMapper;
 import com.zzu.kaoyan.module.membership.entity.UserMembership;
 import com.zzu.kaoyan.module.membership.entity.UserMembership;
 import com.zzu.kaoyan.module.mistake.entity.po.*;
@@ -65,6 +69,10 @@ public class TestDataInitializer implements ApplicationRunner {
     private final DailyPlanMapper dailyPlanMapper;
     private final MistakeNotificationMapper mistakeNotificationMapper;
     private final AiMemoryEmbeddingMapper memoryEmbeddingMapper;
+    private final InterviewSessionMapper interviewSessionMapper;
+    private final InterviewRecordMapper interviewRecordMapper;
+    private final InterviewReportMapper interviewReportMapper;
+    private final ExperiencePostMapper experiencePostMapper;
 
     // ────────────────── Service 注入 ──────────────────
     private final MembershipService membershipService;
@@ -87,6 +95,10 @@ public class TestDataInitializer implements ApplicationRunner {
                                DailyPlanMapper dailyPlanMapper,
                                MistakeNotificationMapper mistakeNotificationMapper,
                                AiMemoryEmbeddingMapper memoryEmbeddingMapper,
+                               InterviewSessionMapper interviewSessionMapper,
+                               InterviewRecordMapper interviewRecordMapper,
+                               InterviewReportMapper interviewReportMapper,
+                               ExperiencePostMapper experiencePostMapper,
                                MembershipService membershipService,
                                StringRedisTemplate stringRedisTemplate) {
         this.userMapper = userMapper;
@@ -106,6 +118,10 @@ public class TestDataInitializer implements ApplicationRunner {
         this.dailyPlanMapper = dailyPlanMapper;
         this.mistakeNotificationMapper = mistakeNotificationMapper;
         this.memoryEmbeddingMapper = memoryEmbeddingMapper;
+        this.interviewSessionMapper = interviewSessionMapper;
+        this.interviewRecordMapper = interviewRecordMapper;
+        this.interviewReportMapper = interviewReportMapper;
+        this.experiencePostMapper = experiencePostMapper;
         this.membershipService = membershipService;
         this.stringRedisTemplate = stringRedisTemplate;
     }
@@ -162,6 +178,8 @@ public class TestDataInitializer implements ApplicationRunner {
             // 已存在 → 重置（包括可能被软删除的情况）
             existing.setUsername(TEST_USERNAME);
             existing.setPassword(BCrypt.hashpw(TEST_PASSWORD, BCrypt.gensalt()));
+            existing.setTargetMajor("计算机技术");
+            existing.setTargetSchool("清华大学");
             existing.setRole("USER");
             existing.setDeleted(false);  // 恢复软删除
             userMapper.updateById(existing);
@@ -173,6 +191,8 @@ public class TestDataInitializer implements ApplicationRunner {
             newUser.setEmail(TEST_EMAIL);
             newUser.setPassword(BCrypt.hashpw(TEST_PASSWORD, BCrypt.gensalt()));
             newUser.setUsername(TEST_USERNAME);
+            newUser.setTargetMajor("计算机技术");
+            newUser.setTargetSchool("清华大学");
             newUser.setRole("USER");
             newUser.setPoints(0);
             newUser.setDeleted(false);
@@ -237,6 +257,20 @@ public class TestDataInitializer implements ApplicationRunner {
         memoryEmbeddingMapper.delete(
                 new LambdaQueryWrapper<AiMemoryEmbedding>().eq(AiMemoryEmbedding::getUserId, userId)
         );
+        // 模拟面试相关
+        List<InterviewSession> userSessions = interviewSessionMapper.selectList(
+                new LambdaQueryWrapper<InterviewSession>().eq(InterviewSession::getUserId, userId));
+        for (InterviewSession s : userSessions) {
+            interviewRecordMapper.delete(
+                    new LambdaQueryWrapper<InterviewRecord>().eq(InterviewRecord::getSessionId, s.getId()));
+            interviewReportMapper.delete(
+                    new LambdaQueryWrapper<InterviewReport>().eq(InterviewReport::getSessionId, s.getId()));
+        }
+        interviewSessionMapper.delete(
+                new LambdaQueryWrapper<InterviewSession>().eq(InterviewSession::getUserId, userId));
+        // 上岸经验贴
+        experiencePostMapper.delete(
+                new LambdaQueryWrapper<ExperiencePost>().eq(ExperiencePost::getUserId, userId));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -542,13 +576,6 @@ public class TestDataInitializer implements ApplicationRunner {
     // Phase 3-P2: 锦上添花种子数据
     // ═══════════════════════════════════════════════════════════════
 
-    private void seedP2Data(Long userId) {
-        seedCheckIns(userId);
-        seedUserStudy(userId);
-        seedUserAiProfile(userId);
-        seedUserEvents(userId);
-        seedMistakeNotes(userId);
-    }
 
     private void seedCheckIns(Long userId) {
         LocalDate today = LocalDate.now();
@@ -642,6 +669,15 @@ public class TestDataInitializer implements ApplicationRunner {
     // ═══════════════════════════════════════════════════════════════
     // Phase 3-P2: 错题本种子数据
     // ═══════════════════════════════════════════════════════════════
+
+    private void seedP2Data(Long userId) {
+        seedCheckIns(userId);
+        seedUserStudy(userId);
+        seedUserAiProfile(userId);
+        seedUserEvents(userId);
+        seedMistakeNotes(userId);
+        seedInterviewData(userId);
+    }
 
     private void seedMistakeNotes(Long userId) {
         LocalDate today = LocalDate.now();
@@ -829,22 +865,159 @@ public class TestDataInitializer implements ApplicationRunner {
         // 种子 5 条语义记忆内容（无真实 embedding，标记为 SEED 供后续真实对话覆盖）
         // 真实 embedding 由 AI 对话产生后异步写入，这些种子数据用于展示"有历史记忆"的状态
         String[][] memories = {
-                {"CHAT_QA", "什么是拉格朗日中值定理？\n拉格朗日中值定理是微积分中的重要定理..."},
-                {"CHAT_QA", "B树和B+树有什么区别？408考试重点是什么？\nB+树是数据库索引的底层结构..."},
-                {"CHAT_QA", "极限怎么求？有哪些常用方法？\n求极限常用方法：等价无穷小替换、洛必达法则..."},
-                {"MISTAKE_NOTE", "求极限 sinx-x/x³\n使用泰勒展开..."},
-                {"MISTAKE_NOTE", "3阶B树插入25后根节点关键字\n中间关键字30上升至父节点..."},
+                {"CHAT_QA", "什么是拉格朗日中值定理？\n拉格朗日中值定理是微积分中的重要定理...", "MATH"},
+                {"CHAT_QA", "B树和B+树有什么区别？408考试重点是什么？\nB+树是数据库索引的底层结构...", "408"},
+                {"CHAT_QA", "极限怎么求？有哪些常用方法？\n求极限常用方法：等价无穷小替换、洛必达法则...", "MATH"},
+                {"MISTAKE_NOTE", "求极限 sinx-x/x³\n使用泰勒展开...", "MATH"},
+                {"MISTAKE_NOTE", "3阶B树插入25后根节点关键字\n中间关键字30上升至父节点...", "408"},
         };
 
         for (String[] m : memories) {
             AiMemoryEmbedding emb = new AiMemoryEmbedding();
             emb.setUserId(userId);
             emb.setContent(m[1]);
+            emb.setSubject(m[2]);
             emb.setSourceType(m[0]);
             emb.setEmbedding("[]");  // 占位，真实对话会自动产生真实向量
             memoryEmbeddingMapper.insert(emb);
         }
 
         log.info("  🧬 已种子 5 条语义记忆占位 (3 CHAT_QA + 2 MISTAKE_NOTE，待真实对话产生真实向量)");
+    }
+
+    private void seedInterviewData(Long userId) {
+        LocalDateTime now = LocalDateTime.now();
+
+        // ──── 面试会话 ────
+        InterviewSession session = new InterviewSession();
+        session.setUserId(userId);
+        session.setTargetSchool("清华大学");
+        session.setTargetMajor("计算机技术");
+        session.setInterviewType("MAJOR");
+        session.setStatus("REPORTED");
+        session.setOverallScore(new java.math.BigDecimal("82.5"));
+        interviewSessionMapper.insert(session);
+
+        // ──── 对话记录（3轮=6条） ────
+        InterviewRecord r1 = new InterviewRecord();
+        r1.setSessionId(session.getId());
+        r1.setRole("ai");
+        r1.setContent("请简单自我介绍一下，重点谈谈你的考研方向和目标院校选择的原因。");
+        r1.setFluencyScore(null);
+        r1.setCreatedAt(now.minusMinutes(20));
+        interviewRecordMapper.insert(r1);
+
+        InterviewRecord r2 = new InterviewRecord();
+        r2.setSessionId(session.getId());
+        r2.setRole("user");
+        r2.setContent("老师好，我叫XXX，本科就读于计算机科学与技术专业。我的考研方向是清华大学计算机技术专硕，选择这个方向主要是因为清华在计算机体系结构和AI方向的研究实力很强，而且我本科期间参与了相关的项目，对系统底层原理比较感兴趣。");
+        r2.setFluencyScore(new java.math.BigDecimal("78.0"));
+        r2.setCreatedAt(now.minusMinutes(19));
+        interviewRecordMapper.insert(r2);
+
+        InterviewRecord r3 = new InterviewRecord();
+        r3.setSessionId(session.getId());
+        r3.setRole("ai");
+        r3.setContent("你的项目经历中提到参与了分布式系统的开发，具体遇到了哪些技术挑战？如何解决的？");
+        r3.setFluencyScore(null);
+        r3.setCreatedAt(now.minusMinutes(18));
+        interviewRecordMapper.insert(r3);
+
+        InterviewRecord r4 = new InterviewRecord();
+        r4.setSessionId(session.getId());
+        r4.setRole("user");
+        r4.setContent("在项目中我们遇到了数据一致性问题——多个节点之间的状态同步出现了延迟。我通过引入Raft共识算法来解决这个问题。具体来说，我们采用了etcd作为分布式协调服务，确保所有的写入操作都经过leader节点统一处理。这个过程中最大的挑战是对Raft协议的理解和调优，特别是网络分区情况下的恢复策略。");
+        r4.setFluencyScore(new java.math.BigDecimal("72.0"));
+        r4.setCreatedAt(now.minusMinutes(17));
+        interviewRecordMapper.insert(r4);
+
+        InterviewRecord r5 = new InterviewRecord();
+        r5.setSessionId(session.getId());
+        r5.setRole("ai");
+        r5.setContent("你对当前计算机技术领域的热点了解多少？比如大模型、云原生这些方向？");
+        r5.setFluencyScore(null);
+        r5.setCreatedAt(now.minusMinutes(16));
+        interviewRecordMapper.insert(r5);
+
+        InterviewRecord r6 = new InterviewRecord();
+        r6.setSessionId(session.getId());
+        r6.setRole("user");
+        r6.setContent("我比较关注大模型的发展。最近GPT和国内的文心一言、通义千问等模型发展很快，但据我了解，这些大模型的底层原理我还是了解不够深入，比如Transformer的注意力机制、RLHF对齐训练等。如果被录取，我希望能在研究生阶段深入研究这些方向。");
+        r6.setFluencyScore(new java.math.BigDecimal("75.0"));
+        r6.setCreatedAt(now.minusMinutes(15));
+        interviewRecordMapper.insert(r6);
+
+        // ──── 面试报告 ────
+        InterviewReport report = new InterviewReport();
+        report.setSessionId(session.getId());
+        report.setTotalScore(new java.math.BigDecimal("82.5"));
+        report.setRadarChart("""
+                [
+                  {"dimension":"语言表达","score":78},
+                  {"dimension":"专业知识","score":85},
+                  {"dimension":"逻辑思维","score":82},
+                  {"dimension":"应变能力","score":75},
+                  {"dimension":"心理素质","score":80}
+                ]""");
+        report.setStrengthAnalysis("专业知识扎实，对分布式系统和Raft共识算法有实战经验，能够清晰阐述技术方案。408计算机基础功底较好，在回答数据结构相关问题时表现出色。项目经历与目标研究方向高度匹配。");
+        report.setWeaknessAnalysis("对前沿技术（大模型、云原生）的底层原理理解不够深入，Transformer注意力机制、RLHF等核心概念仅停留在表面了解。应变能力稍显不足，被追问时偶尔表达不够流畅。需要加强对AI/ML方向的基础理论学习。");
+        report.setSuggestion("1. 深入学习Transformer架构和注意力机制原理，建议阅读《Attention Is All You Need》原论文并复现核心代码。\n2. 加强408计算机组成原理和操作系统的复习，特别是虚拟化和容器技术相关考点。\n3. 多进行模拟面试练习，提高被追问时的应变能力和表达流畅度。\n4. 关注目标院校（清华）导师的研究方向，提前了解相关论文。");
+        report.setSummary("整体表现良好，专业知识功底扎实，项目经验丰富。但在前沿技术理解深度和临场应变方面有提升空间。建议在复试前重点加强AI/ML基础理论学习，同时多进行压力面试模拟。综合评分82.5分，处于中上水平。");
+        interviewReportMapper.insert(report);
+
+        log.info("  🎤 已种子 1 场模拟面试 (MAJOR/清华大学/82.5分) + 6 条对话 + 1 份报告");
+
+        // ──── 上岸经验贴 ────
+        seedExperiencePosts(userId);
+    }
+
+    private void seedExperiencePosts(Long userId) {
+        // 经验贴 1：清华计算机上岸
+        ExperiencePost ep1 = new ExperiencePost();
+        ep1.setUserId(userId);
+        ep1.setUndergradSchool("郑州大学");
+        ep1.setUndergradMajor("计算机科学与技术");
+        ep1.setIsCrossMajor(false);
+        ep1.setIsSecondAttempt(false);
+        ep1.setTargetSchool("清华大学");
+        ep1.setTargetMajor("计算机技术");
+        ep1.setInitialExamTotal(new java.math.BigDecimal("385.0"));
+        ep1.setInitialExamPolitics(new java.math.BigDecimal("72.0"));
+        ep1.setInitialExamEnglish(new java.math.BigDecimal("78.0"));
+        ep1.setInitialExamMath(new java.math.BigDecimal("125.0"));
+        ep1.setInitialExamMajor(new java.math.BigDecimal("110.0"));
+        ep1.setReExamScore(new java.math.BigDecimal("88.0"));
+        ep1.setTips("备考清华计算机最重要的是408基础一定要扎实，尤其是数据结构和操作系统这两门，面试被问到的概率极高。\n\n我的复习节奏：3-6月打基础（王道+天勤），7-9月刷真题+专项强化，10-11月模拟+查漏补缺。\n\n特别推荐：《深入理解计算机系统》(CSAPP) 前6章，清华老师很喜欢问这块。\n\n面试经验：老师更看重你的思维过程而不是标准答案，遇到不会的题坦诚说不会但可以说说你的思路，比瞎猜好得多。");
+        ep1.setIsVerified(true);
+        ep1.setStatus(1);
+        ep1.setViewCount(1520);
+        ep1.setLikeCount(89);
+        ep1.setCollectCount(42);
+        experiencePostMapper.insert(ep1);
+
+        // 经验贴 2：清华软院跨考上岸
+        ExperiencePost ep2 = new ExperiencePost();
+        ep2.setUserId(userId);
+        ep2.setUndergradSchool("河南大学");
+        ep2.setUndergradMajor("电子信息工程");
+        ep2.setIsCrossMajor(true);
+        ep2.setIsSecondAttempt(true);
+        ep2.setTargetSchool("清华大学");
+        ep2.setTargetMajor("软件工程");
+        ep2.setInitialExamTotal(new java.math.BigDecimal("368.0"));
+        ep2.setInitialExamPolitics(new java.math.BigDecimal("68.0"));
+        ep2.setInitialExamEnglish(new java.math.BigDecimal("75.0"));
+        ep2.setInitialExamMath(new java.math.BigDecimal("118.0"));
+        ep2.setInitialExamMajor(new java.math.BigDecimal("107.0"));
+        ep2.setReExamScore(new java.math.BigDecimal("82.0"));
+        ep2.setTips("作为跨考生，我最大的感受是：不要怕跨考，关键是把基础知识补扎实。\n\n我在408上花的时间最多，因为这是跨考生的短板。建议跨考的同学提前一年开始准备408，先用考研辅导书过一遍，再看王道系列的网课。\n\n二战心态很重要：第一年差了15分，但我分析原因后发现主要是数学发挥失常，第二年针对性调整了复习策略，最后成功上岸。\n\n面试建议：准备好你对跨考原因的回答，老师一定会问。要展现出你对新专业的热情和理解深度。");
+        ep2.setIsVerified(true);
+        ep2.setStatus(1);
+        ep2.setViewCount(980);
+        ep2.setLikeCount(56);
+        ep2.setCollectCount(28);
+        experiencePostMapper.insert(ep2);
+
+        log.info("  📖 已种子 2 条上岸经验贴 (清华大学/计算机+软件 匹配目标院校)");
     }
 }

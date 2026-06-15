@@ -20,6 +20,9 @@ public class AiMemoryEmbedding {
     /** 原文（问题 + 回答摘要），检索时用于展示 */
     private String content;
 
+    /** 学科标签（MATH/408/ENGLISH/POLITICS），用于学科过滤 */
+    private String subject;
+
     /** float[] 向量 JSON，维度取决于 Embedding 模型（text-embedding-v2: 1536） */
     private String embedding;
 

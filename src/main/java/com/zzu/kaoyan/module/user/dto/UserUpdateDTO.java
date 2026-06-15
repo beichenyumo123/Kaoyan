@@ -16,6 +16,9 @@ public class UserUpdateDTO {
     @Schema(description = "目标专业", example = "软件工程")
     private String targetMajor;
 
+    @Schema(description = "目标院校", example = "清华大学")
+    private String targetSchool;
+
     @Schema(description = "手机号", example = "13912345678")
     private String phone;
 }

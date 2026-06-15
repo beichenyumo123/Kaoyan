@@ -26,10 +26,12 @@ public interface MemoryService {
     /**
      * 语义检索相似历史对话（Embedding 向量余弦相似度）。
      * 在 AI 答疑时实时调用，用当前问题检索历史记忆。
+     * 同科目的记忆加权，跨科目的降权。
      *
      * @param userId   用户 ID
      * @param question 当前问题
+     * @param subject  当前学科（用于过滤和加权）
      * @return 相似历史文本，无结果时返回空字符串
      */
-    String enrichWithSemanticMemory(Long userId, String question);
+    String enrichWithSemanticMemory(Long userId, String question, String subject);
 }

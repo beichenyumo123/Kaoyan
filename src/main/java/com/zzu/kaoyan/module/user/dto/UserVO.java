@@ -29,6 +29,9 @@ public class UserVO {
     @Schema(description = "目标专业", example = "计算机技术")
     private String targetMajor;
 
+    @Schema(description = "目标院校", example = "清华大学")
+    private String targetSchool;
+
     @Schema(description = "总积分", example = "250")
     private Integer points;
 

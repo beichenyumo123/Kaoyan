@@ -96,6 +96,10 @@ public class UserServiceImpl implements UserService {
             user.setTargetMajor(updateDTO.getTargetMajor());
         }
 
+        if (updateDTO.getTargetSchool() != null) {
+            user.setTargetSchool(updateDTO.getTargetSchool());
+        }
+
         if (updateDTO.getPhone() != null) {
             // 检查手机号是否重复
             LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();

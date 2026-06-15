@@ -11,6 +11,15 @@ import com.zzu.kaoyan.module.ai.mapper.AiDailyTaskMapper;
 import com.zzu.kaoyan.module.ai.mapper.UserAiProfileMapper;
 import com.zzu.kaoyan.module.ai.service.EmbeddingService;
 import com.zzu.kaoyan.module.ai.service.MemoryService;
+import com.zzu.kaoyan.module.ai.entity.UserAiProfile;
+import com.zzu.kaoyan.common.entity.User;
+import com.zzu.kaoyan.mapper.UserMapper;
+import com.zzu.kaoyan.module.experience.entity.ExperiencePost;
+import com.zzu.kaoyan.module.experience.mapper.ExperiencePostMapper;
+import com.zzu.kaoyan.module.interview.entity.InterviewReport;
+import com.zzu.kaoyan.module.interview.entity.InterviewSession;
+import com.zzu.kaoyan.module.interview.mapper.InterviewReportMapper;
+import com.zzu.kaoyan.module.interview.mapper.InterviewSessionMapper;
 import com.zzu.kaoyan.module.mistake.mapper.MistakeNoteMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,19 +54,31 @@ public class MemoryServiceImpl implements MemoryService {
     private final UserStudyMapper userStudyMapper;
     private final AiChatSessionMapper chatSessionMapper;
     private final EmbeddingService embeddingService;
+    private final InterviewReportMapper interviewReportMapper;
+    private final InterviewSessionMapper interviewSessionMapper;
+    private final UserMapper userMapper;
+    private final ExperiencePostMapper experiencePostMapper;
 
     public MemoryServiceImpl(UserAiProfileMapper profileMapper,
                              MistakeNoteMapper mistakeNoteMapper,
                              AiDailyTaskMapper taskMapper,
                              UserStudyMapper userStudyMapper,
                              AiChatSessionMapper chatSessionMapper,
-                             EmbeddingService embeddingService) {
+                             EmbeddingService embeddingService,
+                             InterviewReportMapper interviewReportMapper,
+                             InterviewSessionMapper interviewSessionMapper,
+                             UserMapper userMapper,
+                             ExperiencePostMapper experiencePostMapper) {
         this.profileMapper = profileMapper;
         this.mistakeNoteMapper = mistakeNoteMapper;
         this.taskMapper = taskMapper;
         this.userStudyMapper = userStudyMapper;
         this.chatSessionMapper = chatSessionMapper;
         this.embeddingService = embeddingService;
+        this.interviewReportMapper = interviewReportMapper;
+        this.interviewSessionMapper = interviewSessionMapper;
+        this.userMapper = userMapper;
+        this.experiencePostMapper = experiencePostMapper;
     }
 
     @Override
@@ -97,7 +118,19 @@ public class MemoryServiceImpl implements MemoryService {
                 ctx.append("## 薄弱知识点（近期错题统计）\n").append(weakness);
             }
 
-            // 3. 今日学习进度
+            // 3. 面试报告（最近一次）
+            String interview = buildInterviewSection(userId);
+            if (interview != null) {
+                ctx.append("## 模拟面试记录\n").append(interview);
+            }
+
+            // 4. 上岸经验贴（匹配目标院校）
+            String experience = buildExperienceSection(userId);
+            if (experience != null) {
+                ctx.append("## 上岸经验（同目标院校学长）\n").append(experience);
+            }
+
+            // 5. 今日学习进度
             String progress = buildTodayProgress(userId);
             if (progress != null) {
                 ctx.append("## 今日学习进度\n").append(progress);
@@ -126,8 +159,8 @@ public class MemoryServiceImpl implements MemoryService {
      * 追加语义检索结果到已有上下文（在 TutorAgent 提问时调用）。
      * 需要 question 参数来检索相似历史。
      */
-    public String enrichWithSemanticMemory(Long userId, String question) {
-        List<String> similar = embeddingService.search(userId, question);
+    public String enrichWithSemanticMemory(Long userId, String question, String subject) {
+        List<String> similar = embeddingService.search(userId, question, subject);
         if (similar.isEmpty()) return "";
 
         StringBuilder sb = new StringBuilder();
@@ -230,6 +263,133 @@ public class MemoryServiceImpl implements MemoryService {
             return sb.toString();
         } catch (Exception e) {
             log.warn("构建薄弱知识点失败 — {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 匹配目标院校的上岸经验贴（高质量，有一定收藏量）。
+     */
+    private String buildExperienceSection(Long userId) {
+        try {
+            User user = userMapper.selectById(userId);
+            if (user == null || user.getTargetSchool() == null || user.getTargetSchool().isBlank()) {
+                return null;
+            }
+
+            String targetSchool = user.getTargetSchool();
+            List<ExperiencePost> posts = experiencePostMapper.selectList(
+                    new LambdaQueryWrapper<ExperiencePost>()
+                            .eq(ExperiencePost::getTargetSchool, targetSchool)
+                            .eq(ExperiencePost::getStatus, 1)
+                            .ge(ExperiencePost::getCollectCount, 3)
+                            .orderByDesc(ExperiencePost::getCollectCount)
+                            .last("LIMIT 3"));
+
+            if (posts.isEmpty()) {
+                // 降级：只要有 1 条收藏的就展示
+                posts = experiencePostMapper.selectList(
+                        new LambdaQueryWrapper<ExperiencePost>()
+                                .eq(ExperiencePost::getTargetSchool, targetSchool)
+                                .eq(ExperiencePost::getStatus, 1)
+                                .ge(ExperiencePost::getCollectCount, 1)
+                                .orderByDesc(ExperiencePost::getCollectCount)
+                                .last("LIMIT 2"));
+            }
+
+            if (posts.isEmpty()) return null;
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("共找到 ").append(posts.size()).append(" 条目标同为「").append(targetSchool).append("」的上岸经验：\n");
+            for (ExperiencePost post : posts) {
+                String major = post.getTargetMajor() != null ? post.getTargetMajor() : "未知专业";
+                sb.append("- **").append(major).append("**");
+                if (post.getInitialExamTotal() != null) {
+                    sb.append("（初试 ").append(post.getInitialExamTotal()).append(" 分）");
+                }
+                sb.append(" | 👍").append(post.getLikeCount() != null ? post.getLikeCount() : 0);
+                sb.append(" ⭐").append(post.getCollectCount() != null ? post.getCollectCount() : 0);
+                sb.append("\n");
+                if (post.getTips() != null && !post.getTips().isBlank()) {
+                    String tip = post.getTips().length() > 200
+                            ? post.getTips().substring(0, 200) + "..."
+                            : post.getTips();
+                    sb.append("  > ").append(tip.replace("\n", " ")).append("\n");
+                }
+            }
+            sb.append("\n以上是真实上岸经验，回答时可以作为参考素材提供给用户。");
+
+            return sb.toString();
+        } catch (Exception e) {
+            log.debug("构建经验贴摘要失败 — {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 最近一次模拟面试报告摘要。
+     */
+    private String buildInterviewSection(Long userId) {
+        try {
+            // 查询用户的面试会话
+            List<InterviewSession> sessions = interviewSessionMapper.selectList(
+                    new LambdaQueryWrapper<InterviewSession>()
+                            .eq(InterviewSession::getUserId, userId)
+                            .eq(InterviewSession::getStatus, "REPORTED")
+                            .orderByDesc(InterviewSession::getId)
+                            .last("LIMIT 1"));
+
+            if (sessions.isEmpty()) return null;
+
+            InterviewSession session = sessions.get(0);
+            InterviewReport report = interviewReportMapper.selectOne(
+                    new LambdaQueryWrapper<InterviewReport>()
+                            .eq(InterviewReport::getSessionId, session.getId()));
+
+            if (report == null) return null;
+
+            StringBuilder sb = new StringBuilder();
+            // 面试类型 + 目标
+            String typeLabel = switch (session.getInterviewType() != null ? session.getInterviewType() : "") {
+                case "ENGLISH" -> "英语面试";
+                case "MAJOR" -> "专业课面试";
+                case "COMPREHENSIVE" -> "综合面试";
+                default -> "面试";
+            };
+            sb.append("- 最近").append(typeLabel);
+            if (session.getTargetSchool() != null && !session.getTargetSchool().isBlank()) {
+                sb.append("（目标：").append(session.getTargetSchool());
+                if (session.getTargetMajor() != null && !session.getTargetMajor().isBlank()) {
+                    sb.append(" ").append(session.getTargetMajor());
+                }
+                sb.append("）");
+            }
+            sb.append("\n");
+
+            // 综合评分
+            if (report.getTotalScore() != null) {
+                sb.append("- 综合评分：").append(report.getTotalScore()).append("/100\n");
+            }
+
+            // 薄弱项分析（关键）
+            if (report.getWeaknessAnalysis() != null && !report.getWeaknessAnalysis().isBlank()) {
+                String weakness = report.getWeaknessAnalysis().length() > 150
+                        ? report.getWeaknessAnalysis().substring(0, 150) + "..."
+                        : report.getWeaknessAnalysis();
+                sb.append("- 薄弱项：").append(weakness).append("\n");
+            }
+
+            // 改进建议（取前 2 条）
+            if (report.getSuggestion() != null && !report.getSuggestion().isBlank()) {
+                String suggestion = report.getSuggestion().length() > 120
+                        ? report.getSuggestion().substring(0, 120) + "..."
+                        : report.getSuggestion();
+                sb.append("- 改进建议：").append(suggestion).append("\n");
+            }
+
+            return sb.toString();
+        } catch (Exception e) {
+            log.debug("构建面试报告摘要失败 — {}", e.getMessage());
             return null;
         }
     }

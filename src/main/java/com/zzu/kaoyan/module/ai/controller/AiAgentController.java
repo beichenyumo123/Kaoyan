@@ -207,7 +207,7 @@ public class AiAgentController {
         // 异步保存 embedding（不阻塞响应）
         embeddingService.saveAsync(userId,
                 dto.getQuestion() + "\n" + (answer.length() > 300 ? answer.substring(0, 300) : answer),
-                "CHAT_QA", sessionInfo.id);
+                "CHAT_QA", sessionInfo.id, dto.getSubject());
 
         Map<String, String> data = new HashMap<>();
         data.put("answer", answer);
@@ -280,7 +280,7 @@ public class AiAgentController {
                 // 异步保存 embedding
                 embeddingService.saveAsync(userId,
                         dto.getQuestion() + "\n" + (fullAnswer.length() > 300 ? fullAnswer.substring(0, 300) : fullAnswer.toString()),
-                        "CHAT_QA", sessionInfo.id);
+                        "CHAT_QA", sessionInfo.id, dto.getSubject());
                 // 记录 MySQL 使用日志（Redis 已预扣，这里做持久化）
                 membershipService.recordUsage(userId, "ai_ask");
                 emitter.complete();
@@ -293,7 +293,7 @@ public class AiAgentController {
                     saveMessage(sessionInfo.id, "assistant", fullAnswer.toString(), null);
                     embeddingService.saveAsync(userId,
                             dto.getQuestion() + "\n" + fullAnswer.substring(0, Math.min(300, fullAnswer.length())),
-                            "CHAT_QA", sessionInfo.id);
+                            "CHAT_QA", sessionInfo.id, dto.getSubject());
                 }
                 emitter.completeWithError(e);
             }
