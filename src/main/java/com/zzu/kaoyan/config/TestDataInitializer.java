@@ -11,6 +11,7 @@ import com.zzu.kaoyan.module.activity.mapper.UserStudyMapper;
 import com.zzu.kaoyan.module.ai.entity.*;
 import com.zzu.kaoyan.module.ai.mapper.*;
 import com.zzu.kaoyan.module.membership.entity.UserMembership;
+import com.zzu.kaoyan.module.membership.entity.UserMembership;
 import com.zzu.kaoyan.module.mistake.entity.po.*;
 import com.zzu.kaoyan.module.mistake.mapper.*;
 import com.zzu.kaoyan.module.membership.mapper.MembershipPlanMapper;
@@ -63,6 +64,7 @@ public class TestDataInitializer implements ApplicationRunner {
     private final ReviewLogMapper reviewLogMapper;
     private final DailyPlanMapper dailyPlanMapper;
     private final MistakeNotificationMapper mistakeNotificationMapper;
+    private final AiMemoryEmbeddingMapper memoryEmbeddingMapper;
 
     // ────────────────── Service 注入 ──────────────────
     private final MembershipService membershipService;
@@ -84,6 +86,7 @@ public class TestDataInitializer implements ApplicationRunner {
                                ReviewLogMapper reviewLogMapper,
                                DailyPlanMapper dailyPlanMapper,
                                MistakeNotificationMapper mistakeNotificationMapper,
+                               AiMemoryEmbeddingMapper memoryEmbeddingMapper,
                                MembershipService membershipService,
                                StringRedisTemplate stringRedisTemplate) {
         this.userMapper = userMapper;
@@ -102,6 +105,7 @@ public class TestDataInitializer implements ApplicationRunner {
         this.reviewLogMapper = reviewLogMapper;
         this.dailyPlanMapper = dailyPlanMapper;
         this.mistakeNotificationMapper = mistakeNotificationMapper;
+        this.memoryEmbeddingMapper = memoryEmbeddingMapper;
         this.membershipService = membershipService;
         this.stringRedisTemplate = stringRedisTemplate;
     }
@@ -228,6 +232,10 @@ public class TestDataInitializer implements ApplicationRunner {
         );
         mistakeNoteMapper.delete(
                 new LambdaQueryWrapper<MistakeNotePO>().eq(MistakeNotePO::getUserId, userId)
+        );
+        // 语义记忆向量
+        memoryEmbeddingMapper.delete(
+                new LambdaQueryWrapper<AiMemoryEmbedding>().eq(AiMemoryEmbedding::getUserId, userId)
         );
     }
 
@@ -812,5 +820,31 @@ public class TestDataInitializer implements ApplicationRunner {
         mistakeNotificationMapper.insert(notif3);
 
         log.info("  🔔 已种子 3 条通知 (2 未读 + 1 已读)");
+
+        // ──── 语义记忆向量 ────
+        seedMemoryEmbeddings(userId);
+    }
+
+    private void seedMemoryEmbeddings(Long userId) {
+        // 种子 5 条语义记忆内容（无真实 embedding，标记为 SEED 供后续真实对话覆盖）
+        // 真实 embedding 由 AI 对话产生后异步写入，这些种子数据用于展示"有历史记忆"的状态
+        String[][] memories = {
+                {"CHAT_QA", "什么是拉格朗日中值定理？\n拉格朗日中值定理是微积分中的重要定理..."},
+                {"CHAT_QA", "B树和B+树有什么区别？408考试重点是什么？\nB+树是数据库索引的底层结构..."},
+                {"CHAT_QA", "极限怎么求？有哪些常用方法？\n求极限常用方法：等价无穷小替换、洛必达法则..."},
+                {"MISTAKE_NOTE", "求极限 sinx-x/x³\n使用泰勒展开..."},
+                {"MISTAKE_NOTE", "3阶B树插入25后根节点关键字\n中间关键字30上升至父节点..."},
+        };
+
+        for (String[] m : memories) {
+            AiMemoryEmbedding emb = new AiMemoryEmbedding();
+            emb.setUserId(userId);
+            emb.setContent(m[1]);
+            emb.setSourceType(m[0]);
+            emb.setEmbedding("[]");  // 占位，真实对话会自动产生真实向量
+            memoryEmbeddingMapper.insert(emb);
+        }
+
+        log.info("  🧬 已种子 5 条语义记忆占位 (3 CHAT_QA + 2 MISTAKE_NOTE，待真实对话产生真实向量)");
     }
 }

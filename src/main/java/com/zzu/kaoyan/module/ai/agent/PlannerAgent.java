@@ -6,6 +6,7 @@ import com.zzu.kaoyan.module.ai.entity.UserAiProfile;
 import com.zzu.kaoyan.module.ai.mapper.AiDailyTaskMapper;
 import com.zzu.kaoyan.module.ai.mapper.UserAiProfileMapper;
 import com.zzu.kaoyan.module.ai.service.AiAgentService;
+import com.zzu.kaoyan.module.ai.service.MemoryService;
 import com.zzu.kaoyan.module.ai.service.UserAiProfileService;
 import com.zzu.kaoyan.module.ai.util.JsonArrayExtractor;
 import org.slf4j.Logger;
@@ -35,26 +36,30 @@ public class PlannerAgent {
     private final AiDailyTaskMapper taskMapper;
     private final UserAiProfileMapper profileMapper;
     private final UserAiProfileService profileService;
+    private final MemoryService memoryService;
 
     public PlannerAgent(AiAgentService aiAgentService, AiDailyTaskMapper taskMapper,
-                        UserAiProfileMapper profileMapper, UserAiProfileService profileService) {
+                        UserAiProfileMapper profileMapper, UserAiProfileService profileService,
+                        MemoryService memoryService) {
         this.aiAgentService = aiAgentService;
         this.taskMapper = taskMapper;
         this.profileMapper = profileMapper;
         this.profileService = profileService;
+        this.memoryService = memoryService;
     }
 
     public void planForUser(Long userId, int continuousDays, int totalCheckDays, int studyHours) {
         log.info("PlannerAgent 开始规划 — userId={}, continuousDays={}", userId, continuousDays);
 
-        UserAiProfile profile = profileMapper.selectOne(
-                new LambdaQueryWrapper<UserAiProfile>().eq(UserAiProfile::getUserId, userId));
-        String cognitive = profile != null && profile.getCognitiveProfile() != null
-                ? profile.getCognitiveProfile() : "暂无学习记录";
+        // 使用 MemoryService 聚合的学员档案替代原始认知 JSON
+        String memory = memoryService.buildContext(userId);
+        String profileContext = (memory != null && !memory.isBlank())
+                ? memory
+                : "暂无学习记录";
 
         String userMessage = String.format(
-                "用户连续打卡%d天，总计%d天，今日学习%d小时。学习档案：%s",
-                continuousDays, totalCheckDays, studyHours, cognitive);
+                "用户连续打卡%d天，总计%d天，今日学习%d小时。学员档案：\n%s",
+                continuousDays, totalCheckDays, studyHours, profileContext);
 
         String response = aiAgentService.chat(SYSTEM_PROMPT, userMessage);
         log.info("PlannerAgent LLM 返回 — userId={}, response={}", userId, response);

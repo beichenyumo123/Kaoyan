@@ -7,6 +7,7 @@ import com.zzu.kaoyan.module.ai.entity.AiInterventionLog;
 import com.zzu.kaoyan.module.ai.mapper.AiDailyTaskMapper;
 import com.zzu.kaoyan.module.ai.mapper.AiInterventionLogMapper;
 import com.zzu.kaoyan.module.ai.service.AiAgentService;
+import com.zzu.kaoyan.module.ai.service.MemoryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -37,12 +38,14 @@ public class SupervisorAgent {
     private final AiAgentService aiAgentService;
     private final AiDailyTaskMapper taskMapper;
     private final AiInterventionLogMapper interventionMapper;
+    private final MemoryService memoryService;
 
     public SupervisorAgent(AiAgentService aiAgentService, AiDailyTaskMapper taskMapper,
-                           AiInterventionLogMapper interventionMapper) {
+                           AiInterventionLogMapper interventionMapper, MemoryService memoryService) {
         this.aiAgentService = aiAgentService;
         this.taskMapper = taskMapper;
         this.interventionMapper = interventionMapper;
+        this.memoryService = memoryService;
     }
 
     /**
@@ -91,7 +94,15 @@ public class SupervisorAgent {
                 log.info("SupervisorAgent 命中用户 — userId={}, 完成率={}%, 总任务={}",
                         userId, Math.round(rate * 100), userTasks.size());
 
-                String warning = aiAgentService.chat(SYSTEM_PROMPT,
+                // 构建个性化系统提示（注入学员档案）
+                String personalizedPrompt = SYSTEM_PROMPT;
+                String memory = memoryService.buildContext(userId);
+                if (memory != null && !memory.isBlank()) {
+                    personalizedPrompt = SYSTEM_PROMPT + "\n\n该学生的背景信息：\n" + memory
+                            + "\n请结合学生背景，给出更有针对性的警示，直击其薄弱学科和懈怠原因。";
+                }
+
+                String warning = aiAgentService.chat(personalizedPrompt,
                         String.format("该考生近3天 %d 项任务仅完成 %d 项，完成率 %.0f%%。",
                                 userTasks.size(), completed, rate * 100));
 

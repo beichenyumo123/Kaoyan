@@ -10,20 +10,21 @@
     <select id="searchByKeywords" resultType="com.zzu.kaoyan.module.ai.entity.KnowledgePoint">
         SELECT id, subject, chapter, title, content, keywords, importance, created_at
         FROM ai_knowledge_point
-        <where>
-            <if test="subject != null and subject != ''">
-                AND subject = #{subject}
-            </if>
-            <if test="keywords != null and keywords.size() > 0">
-                AND (
-                <foreach collection="keywords" item="kw" separator=" OR ">
-                    title LIKE CONCAT('%', #{kw}, '%')
-                    OR keywords LIKE CONCAT('%', #{kw}, '%')
-                    OR content LIKE CONCAT('%', #{kw}, '%')
-                </foreach>
-                )
-            </if>
-        </where>
+        WHERE id IN (
+            SELECT MIN(id) FROM ai_knowledge_point GROUP BY title
+        )
+        <if test="subject != null and subject != ''">
+            AND subject = #{subject}
+        </if>
+        <if test="keywords != null and keywords.size() > 0">
+            AND (
+            <foreach collection="keywords" item="kw" separator=" OR ">
+                title LIKE CONCAT('%', #{kw}, '%')
+                OR keywords LIKE CONCAT('%', #{kw}, '%')
+                OR content LIKE CONCAT('%', #{kw}, '%')
+            </foreach>
+            )
+        </if>
         ORDER BY
             CASE WHEN importance = 'HIGH' THEN 0 WHEN importance = 'MEDIUM' THEN 1 ELSE 2 END,
             id ASC

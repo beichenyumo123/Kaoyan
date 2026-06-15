@@ -6,6 +6,7 @@ import com.github.pagehelper.PageInfo;
 import com.zzu.kaoyan.common.exception.BusinessException;
 import com.zzu.kaoyan.common.result.ResultCode;
 import com.zzu.kaoyan.common.util.MarkdownRenderUtil;
+import com.zzu.kaoyan.module.ai.service.EmbeddingService;
 import com.zzu.kaoyan.module.mistake.entity.dto.MistakeNoteCreateDTO;
 import com.zzu.kaoyan.module.mistake.entity.dto.MistakeNoteUpdateDTO;
 import com.zzu.kaoyan.module.mistake.entity.dto.QuickSaveDTO;
@@ -49,6 +50,7 @@ public class MistakeNoteServiceImpl implements MistakeNoteService {
     private final MistakeNotificationService notificationService;
     private final RestTemplate aiRestTemplate;
     private final AiApiProperties aiApiProperties;
+    private final EmbeddingService embeddingService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public MistakeNoteServiceImpl(MistakeNoteMapper mistakeNoteMapper,
@@ -57,7 +59,8 @@ public class MistakeNoteServiceImpl implements MistakeNoteService {
                                   EbbinghausService ebbinghausService,
                                   MistakeNotificationService notificationService,
                                   @org.springframework.beans.factory.annotation.Qualifier("aiRestTemplate") RestTemplate aiRestTemplate,
-                                  AiApiProperties aiApiProperties) {
+                                  AiApiProperties aiApiProperties,
+                                  EmbeddingService embeddingService) {
         this.mistakeNoteMapper = mistakeNoteMapper;
         this.reviewLogMapper = reviewLogMapper;
         this.dailyPlanMapper = dailyPlanMapper;
@@ -65,6 +68,7 @@ public class MistakeNoteServiceImpl implements MistakeNoteService {
         this.notificationService = notificationService;
         this.aiRestTemplate = aiRestTemplate;
         this.aiApiProperties = aiApiProperties;
+        this.embeddingService = embeddingService;
     }
 
     @Override
@@ -537,6 +541,12 @@ public class MistakeNoteServiceImpl implements MistakeNoteService {
         note.setCreatedAt(LocalDateTime.now());
         note.setUpdatedAt(LocalDateTime.now());
         mistakeNoteMapper.insert(note);
+
+        // 异步保存 embedding（语义记忆）
+        embeddingService.saveAsync(userId,
+                (dto.getQuestionContent() != null ? dto.getQuestionContent() : "")
+                        + "\n" + (dto.getAnswer() != null ? dto.getAnswer().substring(0, Math.min(300, dto.getAnswer().length())) : ""),
+                "MISTAKE_NOTE", note.getId());
 
         log.info("AI快速收藏成功 — userId={}, noteId={}, chatMessageIds={}", userId, note.getId(), dto.getChatMessageIds());
         return Map.of("saved", true, "noteId", note.getId());

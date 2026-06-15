@@ -10,6 +10,7 @@ import com.zzu.kaoyan.module.ai.mapper.AiDailyTaskMapper;
 import com.zzu.kaoyan.module.ai.mapper.AiInterventionLogMapper;
 import com.zzu.kaoyan.module.ai.mapper.AiReportMapper;
 import com.zzu.kaoyan.module.ai.service.AiAgentService;
+import com.zzu.kaoyan.module.ai.service.MemoryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -43,15 +44,17 @@ public class ReviewAgent {
     private final CheckInMapper checkInMapper;
     private final AiInterventionLogMapper interventionMapper;
     private final AiReportMapper reportMapper;
+    private final MemoryService memoryService;
 
     public ReviewAgent(AiAgentService aiAgentService, AiDailyTaskMapper taskMapper,
                        CheckInMapper checkInMapper, AiInterventionLogMapper interventionMapper,
-                       AiReportMapper reportMapper) {
+                       AiReportMapper reportMapper, MemoryService memoryService) {
         this.aiAgentService = aiAgentService;
         this.taskMapper = taskMapper;
         this.checkInMapper = checkInMapper;
         this.interventionMapper = interventionMapper;
         this.reportMapper = reportMapper;
+        this.memoryService = memoryService;
     }
 
     public String generateReport(Long userId) {
@@ -79,13 +82,19 @@ public class ReviewAgent {
             int totalStudyHours = checkIns.stream().mapToInt(c ->
                     c.getStudyHours() != null ? c.getStudyHours() : 0).sum();
 
-            String userMessage = String.format(
+            // 注入学员档案，让周报关联薄弱知识点和长期学习轨迹
+            String memory = memoryService.buildContext(userId);
+            String enrichedUserMessage = String.format(
                     "本周数据：打卡%d天，总学习%d小时，AI任务%d项完成%d项（完成率%.0f%%）。",
                     checkInDays, totalStudyHours, totalTasks, completedTasks, taskRate * 100);
+            if (memory != null && !memory.isBlank()) {
+                enrichedUserMessage += "\n\n学员完整档案（包含薄弱知识点、学习阶段、心理状态）：\n" + memory;
+                enrichedUserMessage += "\n请在周报中结合薄弱知识点给出针对性建议，关联长期学习轨迹分析趋势。";
+            }
 
-            log.info("ReviewAgent 上下文 — userId={}, {}", userId, userMessage);
+            log.info("ReviewAgent 上下文 — userId={}, {}", userId, enrichedUserMessage);
 
-            String report = aiAgentService.chat(SYSTEM_PROMPT, userMessage);
+            String report = aiAgentService.chat(SYSTEM_PROMPT, enrichedUserMessage);
             log.info("ReviewAgent LLM 返回长度={}", report.length());
 
             // 持久化周报

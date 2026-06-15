@@ -3,6 +3,7 @@ package com.zzu.kaoyan.module.ai.agent;
 import com.zzu.kaoyan.module.ai.entity.AiInterventionLog;
 import com.zzu.kaoyan.module.ai.mapper.AiInterventionLogMapper;
 import com.zzu.kaoyan.module.ai.service.AiAgentService;
+import com.zzu.kaoyan.module.ai.service.MemoryService;
 import com.zzu.kaoyan.module.ai.service.UserAiProfileService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,18 +31,28 @@ public class PsychologyAgent {
     private final AiAgentService aiAgentService;
     private final AiInterventionLogMapper interventionMapper;
     private final UserAiProfileService profileService;
+    private final MemoryService memoryService;
 
     public PsychologyAgent(AiAgentService aiAgentService, AiInterventionLogMapper interventionMapper,
-                           UserAiProfileService profileService) {
+                           UserAiProfileService profileService, MemoryService memoryService) {
         this.aiAgentService = aiAgentService;
         this.interventionMapper = interventionMapper;
         this.profileService = profileService;
+        this.memoryService = memoryService;
     }
 
     public void analyzeAndIntervene(Long userId, String notes, String triggerReason) {
         log.info("PsychologyAgent 开始分析 — userId={}, notes={}", userId, notes);
 
-        String response = aiAgentService.chat(SYSTEM_PROMPT, notes);
+        // 注入学员档案，让心理老师了解用户整体状态
+        String memory = memoryService.buildContext(userId);
+        String enrichedSystemPrompt = SYSTEM_PROMPT;
+        if (memory != null && !memory.isBlank()) {
+            enrichedSystemPrompt = SYSTEM_PROMPT + "\n\n该学生的近期学习档案：\n" + memory
+                    + "\n请结合学习状态给出更有针对性的心理关怀。";
+        }
+
+        String response = aiAgentService.chat(enrichedSystemPrompt, notes);
         log.info("PsychologyAgent LLM 返回 — userId={}, response={}", userId, response);
 
         if (response == null || response.isBlank()) {

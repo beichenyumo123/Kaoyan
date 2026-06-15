@@ -7,6 +7,7 @@ import com.zzu.kaoyan.module.ai.config.AiApiProperties;
 import com.zzu.kaoyan.module.ai.entity.KnowledgePoint;
 import com.zzu.kaoyan.module.ai.mapper.AiKnowledgePointMapper;
 import com.zzu.kaoyan.module.ai.service.AiAgentService;
+import com.zzu.kaoyan.module.ai.service.MemoryService;
 import com.zzu.kaoyan.module.mistake.entity.vo.OCRResultVO;
 import com.zzu.kaoyan.module.mistake.mapper.MistakeNoteMapper;
 import com.zzu.kaoyan.module.mistake.service.OCRService;
@@ -75,6 +76,7 @@ public class TutorAgent {
     private final ObjectMapper objectMapper;
     private final OCRService ocrService;
     private final MistakeNoteMapper mistakeNoteMapper;
+    private final MemoryService memoryService;
 
     public TutorAgent(AiKnowledgePointMapper knowledgePointMapper,
                       AiAgentService aiAgentService,
@@ -82,7 +84,8 @@ public class TutorAgent {
                       @Qualifier("aiStreamRestTemplate") RestTemplate aiStreamRestTemplate,
                       AiApiProperties apiProperties,
                       OCRService ocrService,
-                      MistakeNoteMapper mistakeNoteMapper) {
+                      MistakeNoteMapper mistakeNoteMapper,
+                      MemoryService memoryService) {
         this.knowledgePointMapper = knowledgePointMapper;
         this.aiAgentService = aiAgentService;
         this.aiRestTemplate = aiRestTemplate;
@@ -91,6 +94,7 @@ public class TutorAgent {
         this.objectMapper = new ObjectMapper();
         this.ocrService = ocrService;
         this.mistakeNoteMapper = mistakeNoteMapper;
+        this.memoryService = memoryService;
     }
 
     /**
@@ -166,13 +170,27 @@ public class TutorAgent {
     public String answer(String question, String subject, String imageUrl, Long userId) {
         log.info("TutorAgent 开始答疑 — question={}, subject={}, hasImage={}", question, subject, imageUrl != null);
 
-        // 构建动态 system prompt（注入薄弱知识点）
+        // 构建动态 system prompt（注入薄弱知识点 + 学员档案）
         String systemPrompt = SYSTEM_PROMPT;
         if (userId != null) {
+            // 1. 薄弱知识点（来自错题本统计）
             String weakness = buildWeaknessContext(userId, subject);
             if (weakness != null) {
-                systemPrompt = SYSTEM_PROMPT + "\n\n【用户薄弱知识点】\n" + weakness
+                systemPrompt += "\n\n【用户薄弱知识点】\n" + weakness
                         + "\n回答时注意强化这些关联，适当回顾基础概念。";
+            }
+            // 2. 学员档案（来自 MemoryService 聚合）
+            String memory = memoryService.buildContext(userId, subject);
+            if (memory != null && !memory.isBlank()) {
+                systemPrompt += memory;
+                systemPrompt += "\n\n请根据以上学员档案，个性化调整回答——关联薄弱知识点、适配学习阶段、关注心理状态。";
+            }
+            // 3. 语义记忆（用当前问题检索相似历史）
+            if (question != null && !question.isBlank()) {
+                String semanticMemory = memoryService.enrichWithSemanticMemory(userId, question);
+                if (!semanticMemory.isBlank()) {
+                    systemPrompt += semanticMemory;
+                }
             }
         }
 
@@ -241,13 +259,24 @@ public class TutorAgent {
     public void answerStream(String question, String subject, String imageUrl, Consumer<String> onChunk, Long userId) {
         log.info("TutorAgent 流式答疑 — question={}, subject={}, hasImage={}", question, subject, imageUrl != null);
 
-        // 构建动态 system prompt（注入薄弱知识点）
+        // 构建动态 system prompt（注入薄弱知识点 + 学员档案）
         String systemPrompt = SYSTEM_PROMPT;
         if (userId != null) {
             String weakness = buildWeaknessContext(userId, subject);
             if (weakness != null) {
-                systemPrompt = SYSTEM_PROMPT + "\n\n【用户薄弱知识点】\n" + weakness
+                systemPrompt += "\n\n【用户薄弱知识点】\n" + weakness
                         + "\n回答时注意强化这些关联，适当回顾基础概念。";
+            }
+            String memory = memoryService.buildContext(userId, subject);
+            if (memory != null && !memory.isBlank()) {
+                systemPrompt += memory;
+                systemPrompt += "\n\n请根据以上学员档案，个性化调整回答——关联薄弱知识点、适配学习阶段、关注心理状态。";
+            }
+            if (question != null && !question.isBlank()) {
+                String semanticMemory = memoryService.enrichWithSemanticMemory(userId, question);
+                if (!semanticMemory.isBlank()) {
+                    systemPrompt += semanticMemory;
+                }
             }
         }
 

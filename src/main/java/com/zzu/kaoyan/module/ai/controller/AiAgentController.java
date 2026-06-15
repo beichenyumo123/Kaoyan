@@ -24,6 +24,7 @@ import com.zzu.kaoyan.module.activity.entity.po.UserStudyPO;
 import com.zzu.kaoyan.module.activity.mapper.UserStudyMapper;
 import com.zzu.kaoyan.module.ai.vo.AiTaskVO;
 import com.zzu.kaoyan.module.ai.vo.InterventionVO;
+import com.zzu.kaoyan.module.ai.service.EmbeddingService;
 import com.zzu.kaoyan.module.membership.service.MembershipService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -63,6 +64,7 @@ public class AiAgentController {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
     private final MembershipService membershipService;
+    private final EmbeddingService embeddingService;
 
     public AiAgentController(AiDailyTaskMapper taskMapper,
                              AiInterventionLogMapper interventionMapper,
@@ -78,7 +80,8 @@ public class AiAgentController {
                              TutorAgent tutorAgent,
                              ApplicationEventPublisher eventPublisher,
                              ObjectMapper objectMapper,
-                             MembershipService membershipService) {
+                             MembershipService membershipService,
+                             EmbeddingService embeddingService) {
         this.taskMapper = taskMapper;
         this.interventionMapper = interventionMapper;
         this.knowledgePointMapper = knowledgePointMapper;
@@ -94,6 +97,7 @@ public class AiAgentController {
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
         this.membershipService = membershipService;
+        this.embeddingService = embeddingService;
     }
 
     // ==================== 1. AI 任务 ====================
@@ -200,6 +204,10 @@ public class AiAgentController {
 
         String answer = tutorAgent.answer(dto.getQuestion(), dto.getSubject(), dto.getImageUrl(), userId);
         saveMessage(sessionInfo.id, "assistant", answer, null);
+        // 异步保存 embedding（不阻塞响应）
+        embeddingService.saveAsync(userId,
+                dto.getQuestion() + "\n" + (answer.length() > 300 ? answer.substring(0, 300) : answer),
+                "CHAT_QA", sessionInfo.id);
 
         Map<String, String> data = new HashMap<>();
         data.put("answer", answer);
@@ -269,6 +277,10 @@ public class AiAgentController {
                 }, userId);
                 // 流式完成后保存 AI 回复到数据库
                 saveMessage(sessionInfo.id, "assistant", fullAnswer.toString(), null);
+                // 异步保存 embedding
+                embeddingService.saveAsync(userId,
+                        dto.getQuestion() + "\n" + (fullAnswer.length() > 300 ? fullAnswer.substring(0, 300) : fullAnswer.toString()),
+                        "CHAT_QA", sessionInfo.id);
                 // 记录 MySQL 使用日志（Redis 已预扣，这里做持久化）
                 membershipService.recordUsage(userId, "ai_ask");
                 emitter.complete();
@@ -279,6 +291,9 @@ public class AiAgentController {
                 // 即使失败也保存已有的部分回复
                 if (fullAnswer.length() > 0) {
                     saveMessage(sessionInfo.id, "assistant", fullAnswer.toString(), null);
+                    embeddingService.saveAsync(userId,
+                            dto.getQuestion() + "\n" + fullAnswer.substring(0, Math.min(300, fullAnswer.length())),
+                            "CHAT_QA", sessionInfo.id);
                 }
                 emitter.completeWithError(e);
             }
