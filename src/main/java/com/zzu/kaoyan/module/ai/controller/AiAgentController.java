@@ -39,6 +39,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 @RestController
@@ -250,28 +251,41 @@ public class AiAgentController {
         SessionInfo sessionInfo = ensureSession(userId, dto.getSessionId(), dto.getQuestion());
         saveMessage(sessionInfo.id, "user", dto.getQuestion(), dto.getImageUrl());
 
+        // 标志位：防止超时/错误回调与正常流式发送并发操作 emitter
+        AtomicBoolean emitterDone = new AtomicBoolean(false);
+
         // 异步执行，不阻塞请求线程
         CompletableFuture.runAsync(() -> {
             StringBuilder fullAnswer = new StringBuilder();
             try {
                 // 先发送会话元数据（sessionId + title），让前端立即知道标题
-                emitter.send(objectMapper.writeValueAsString(
-                        Map.of("type", "meta", "sessionId", sessionInfo.id, "title", sessionInfo.title)));
+                if (!emitterDone.get()) {
+                    emitter.send(objectMapper.writeValueAsString(
+                            Map.of("type", "meta", "sessionId", sessionInfo.id, "title", sessionInfo.title)));
+                }
 
                 tutorAgent.answerStream(dto.getQuestion(), dto.getSubject(), dto.getImageUrl(), chunk -> {
+                    if (emitterDone.get()) return; // emitter 已关闭，丢弃后续 chunk
                     fullAnswer.append(chunk);
                     try {
                         // 用 JSON 包裹 chunk，确保 \n 等特殊字符正确转义，不会破坏 SSE 协议格式
                         emitter.send(objectMapper.writeValueAsString(Map.of("content", chunk)));
+                    } catch (IllegalStateException e) {
+                        // emitter 已被超时/错误回调关闭，静默标记完成并中止
+                        emitterDone.set(true);
+                        log.debug("SSE 发送失败（emitter 已关闭） — userId={}", userId);
                     } catch (Exception e) {
                         log.warn("SSE 发送失败 — userId={}", userId, e);
                     }
                 }, userId);
+
                 // 流式完成后保存 AI 回复到数据库
                 saveMessage(sessionInfo.id, "assistant", fullAnswer.toString(), null);
                 // 记录 MySQL 使用日志（Redis 已预扣，这里做持久化）
                 membershipService.recordUsage(userId, "ai_ask");
-                emitter.complete();
+                if (emitterDone.compareAndSet(false, true)) {
+                    emitter.complete();
+                }
             } catch (Exception e) {
                 log.error("SSE 流式答疑失败 — userId={}", userId, e);
                 // 退款配额（AI 调用失败，不应扣用户次数）
@@ -280,14 +294,18 @@ public class AiAgentController {
                 if (fullAnswer.length() > 0) {
                     saveMessage(sessionInfo.id, "assistant", fullAnswer.toString(), null);
                 }
-                emitter.completeWithError(e);
+                if (emitterDone.compareAndSet(false, true)) {
+                    emitter.completeWithError(e);
+                }
             }
         });
 
         // 注册超时和错误回调
         emitter.onTimeout(() -> {
             log.warn("SSE 超时 — userId={}", userId);
-            emitter.complete();
+            if (emitterDone.compareAndSet(false, true)) {
+                emitter.complete();
+            }
         });
         emitter.onError(e -> log.warn("SSE 错误 — userId={}", userId, e));
 

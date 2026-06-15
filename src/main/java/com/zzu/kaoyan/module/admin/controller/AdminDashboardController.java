@@ -6,6 +6,8 @@ import com.zzu.kaoyan.common.entity.User;
 import com.zzu.kaoyan.common.result.Result;
 import com.zzu.kaoyan.mapper.PostMapper;
 import com.zzu.kaoyan.mapper.UserMapper;
+import com.zzu.kaoyan.module.certification.entity.UserVerification;
+import com.zzu.kaoyan.module.certification.mapper.UserVerificationMapper;
 import com.zzu.kaoyan.module.post.entity.Post;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,10 +29,14 @@ public class AdminDashboardController {
 
     private final UserMapper userMapper;
     private final PostMapper postMapper;
+    private final UserVerificationMapper verificationMapper;
 
-    public AdminDashboardController(UserMapper userMapper, PostMapper postMapper) {
+    public AdminDashboardController(UserMapper userMapper,
+                                    PostMapper postMapper,
+                                    UserVerificationMapper verificationMapper) {
         this.userMapper = userMapper;
         this.postMapper = postMapper;
+        this.verificationMapper = verificationMapper;
     }
 
     @GetMapping("/dashboard")
@@ -47,11 +53,25 @@ public class AdminDashboardController {
                         .eq(Post::getIsDeleted, 0)
                         .between(Post::getCreatedAt, todayStart, todayEnd));
 
+        // 今日新增认证申请
+        long todayVerifications = verificationMapper.selectCount(
+                new LambdaQueryWrapper<UserVerification>()
+                        .eq(UserVerification::getDeleted, false)
+                        .between(UserVerification::getCreatedAt, todayStart, todayEnd));
+
+        // 待审核认证数
+        long pendingVerifications = verificationMapper.selectCount(
+                new LambdaQueryWrapper<UserVerification>()
+                        .eq(UserVerification::getDeleted, false)
+                        .eq(UserVerification::getStatus, 0));
+
         List<Map<String, Object>> topActiveUsers = userMapper.selectTopActiveUsers(5);
 
         Map<String, Object> data = new HashMap<>();
         data.put("totalUsers", totalUsers);
         data.put("todayPosts", todayPosts);
+        data.put("todayVerifications", todayVerifications);
+        data.put("pendingVerifications", pendingVerifications);
         data.put("topActiveUsers", topActiveUsers);
         return Result.success(data);
     }

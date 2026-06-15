@@ -298,9 +298,18 @@ public class TutorAgent {
         requestBody.put("max_tokens", 4096);
         requestBody.put("stream", true);
 
+        // 校验 API Key 是否配置
+        String apiKey = apiProperties.getKey();
+        if (apiKey == null || apiKey.isBlank()) {
+            String errorMsg = "AI API Key 未配置，请设置环境变量 DASHSCOPE_API_KEY";
+            log.error(errorMsg);
+            onChunk.accept("\n\n【AI 调用失败】" + errorMsg);
+            return;
+        }
+
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(apiProperties.getKey());
+        headers.setBearerAuth(apiKey);
         HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
         try {
@@ -309,10 +318,19 @@ public class TutorAgent {
                     org.springframework.http.HttpMethod.POST,
                     request -> {
                         request.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-                        request.getHeaders().setBearerAuth(apiProperties.getKey());
+                        request.getHeaders().setBearerAuth(apiKey);
                         objectMapper.writeValue(request.getBody(), requestBody);
                     },
                     response -> {
+                        // 检查 HTTP 状态码，提前拦截认证等错误
+                        int statusCode = response.getStatusCode().value();
+                        if (statusCode >= 400) {
+                            String bodyText = new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8);
+                            log.error("LLM API 返回错误 — status={}, body={}", statusCode, bodyText);
+                            onChunk.accept("\n\n【AI 调用失败】API 返回 HTTP " + statusCode);
+                            return null;
+                        }
+
                         try (InputStream is = response.getBody();
                              BufferedReader reader = new BufferedReader(
                                      new InputStreamReader(is, StandardCharsets.UTF_8))) {
@@ -487,6 +505,13 @@ public class TutorAgent {
         requestBody.put("max_tokens", 4096);
         requestBody.put("stream", true);
 
+        // 校验 API Key
+        String apiKey = apiProperties.getKey();
+        if (apiKey == null || apiKey.isBlank()) {
+            log.error("AI API Key 未配置，无法执行多模态流式调用");
+            return false;
+        }
+
         final boolean[] hadError = {false};
 
         try {
@@ -495,10 +520,19 @@ public class TutorAgent {
                     org.springframework.http.HttpMethod.POST,
                     request -> {
                         request.getHeaders().setContentType(MediaType.APPLICATION_JSON);
-                        request.getHeaders().setBearerAuth(apiProperties.getKey());
+                        request.getHeaders().setBearerAuth(apiKey);
                         objectMapper.writeValue(request.getBody(), requestBody);
                     },
                     response -> {
+                        // 检查 HTTP 状态码
+                        int statusCode = response.getStatusCode().value();
+                        if (statusCode >= 400) {
+                            String bodyText = new String(response.getBody().readAllBytes(), StandardCharsets.UTF_8);
+                            hadError[0] = true;
+                            log.error("多模态 LLM API 返回错误 — status={}, body={}", statusCode, bodyText);
+                            return null;
+                        }
+
                         try (InputStream is = response.getBody();
                              BufferedReader reader = new BufferedReader(
                                      new InputStreamReader(is, StandardCharsets.UTF_8))) {
