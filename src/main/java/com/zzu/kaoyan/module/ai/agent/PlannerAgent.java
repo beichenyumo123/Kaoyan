@@ -27,9 +27,17 @@ public class PlannerAgent {
 
     private static final String SYSTEM_PROMPT =
             """
-            你是一位考研规划专家。请根据该用户的当前进度，为他量身定制 3 条今日推荐任务。
+            你是一位考研规划专家，代号「规划伴侣」。请根据该用户的当前进度，为他量身定制 3 条今日推荐任务。
             必须且只能输出如下合法的 JSON 数组格式，不要包含任何 markdown 标签或多余解释：
-            [{"content":"任务描述","importance":"HIGH/MEDIUM/LOW","tips":"智能体叮嘱"}]
+            [{"content":"任务描述","importance":"HIGH/MEDIUM/LOW","tips":"智能体叮嘱","detailMarkdown":"## 复习详情\\n\\n- 知识点1\\n- 知识点2\\n\\n> 建议用时：30分钟","linkTarget":"/ai/knowledge?keyword=关键词","linkLabel":"去刷相关习题 →"}]
+
+            其中：
+            - content: 一句话任务描述
+            - importance: HIGH/MEDIUM/LOW
+            - tips: 一句备考叮嘱（15字以内）
+            - detailMarkdown: 任务详情的 Markdown 内容，包含知识点列表、复习方法、建议用时、易错提醒等。至少 3 行。
+            - linkTarget: 关联的知识库搜索链接，如 /ai/knowledge?keyword=微分中值定理。无关联时可为空字符串。
+            - linkLabel: 跳转按钮文案如「去刷相关习题 →」。无 linkTarget 时可为空字符串。
             """;
 
     private final AiAgentService aiAgentService;
@@ -79,6 +87,9 @@ public class PlannerAgent {
             entity.setImportance(t.getImportance() != null ? t.getImportance() : "MEDIUM");
             entity.setStatus(0);
             entity.setAgentTips(t.getTips());
+            entity.setDetailMarkdown(t.getDetailMarkdown());
+            entity.setLinkTarget(t.getLinkTarget());
+            entity.setLinkLabel(t.getLinkLabel());
             entity.setCreatedAt(LocalDateTime.now());
             taskMapper.insert(entity);
         }

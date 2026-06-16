@@ -1,5 +1,127 @@
 # 版本更新说明
 
+> 版本：v2.3  
+> 日期：2026-06-16  
+> 主题：Agent 系统改善 — 详情 Markdown + 学伴团命名统一 + 习题预生成
+
+---
+
+## 一、API 字段扩展
+
+### 1.1 任务详情 Markdown
+
+**问题**：`GET /api/ai/tasks` 只返回 `taskContent` + `agentTips` 纯文本，前端无法展示富文本详情。
+
+**方案**：`ai_daily_task` 新增 3 个字段：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `detailMarkdown` | TEXT | 任务详情，Markdown 格式。前端统一 `renderMarkdown()` 渲染 |
+| `linkTarget` | VARCHAR(256) | 跳转路由，如 `/ai/knowledge?keyword=极限` |
+| `linkLabel` | VARCHAR(64) | 按钮文案，如「去刷相关习题 →」 |
+
+**效果**：前端点击「查看详情 →」→ 弹 Modal 渲染 Markdown 详情。
+
+### 1.2 干预详情 Markdown
+
+**问题**：`GET /api/ai/interventions` 只有 `interventionContent` 纯文本。
+
+**方案**：`ai_intervention_log` 同样新增 `detailMarkdown` / `linkTarget` / `linkLabel` 3 个字段。
+
+**效果**：不同 Agent 生成不同风格的 Markdown — 行为分析师写习题列表，心理树洞写情绪建议，铁面教官写补漏计划，前端只需 `renderMarkdown()` 统一渲染。
+
+### 1.3 向后兼容
+
+新字段为 `null` 时前端不展示对应按钮，完全向后兼容。
+
+---
+
+## 二、Agent 名称统一（学伴团体系）
+
+| Agent | 旧名称 | 新名称 | 角色 |
+|-------|--------|--------|------|
+| Planner | *(无)* | **规划伴侣** | 每日任务规划 |
+| Tutor | *(无)* | **答疑导师** | 知识问答 |
+| Behavior | `Behavior` | **行为分析师** | 浏览行为分析 + 习题推荐 |
+| Psychology | `Psychology` | **心理树洞** | 情绪分析 + 放松建议 |
+| Supervisor | `Supervisor` | **铁面教官** | 完成率预警 + 补漏计划 |
+| Review | `Review` | **透视专家** | 周报生成 + 趋势分析 |
+
+6 个 Agent 统一为中文「学伴团」命名风格。
+
+---
+
+## 三、各 Agent DetailMarkdown 生成策略
+
+### 规划伴侣 (PlannerAgent)
+LLM prompt 要求输出 `detailMarkdown`（复习知识点列表、推荐习题、建议用时）+ `linkTarget`（知识库搜索链接）+ `linkLabel`。
+
+### 行为分析师 (BehaviorAnalysisAgent)
+LLM 预生成习题：注入 `AiAgentService`，根据浏览关键词调用 LLM 生成 3 道完整习题（**题目** + **解析** + **答案**），直接嵌入 `detailMarkdown`。答案区用 `<details>` 标签折叠。`linkTarget`/`linkLabel` 降级为补充入口。
+
+### 心理树洞 (PsychologyAgent)
+LLM prompt 改为 JSON 输出 `{"message":"...","detailMarkdown":"## 情绪分析\n..."}`，包含情绪标签、趋势分析和放松建议。解析失败自动回退纯文本。
+
+### 铁面教官 (SupervisorAgent)
+LLM prompt 改为 JSON 输出，`detailMarkdown` 包含完成率表格和 3 条补漏建议。`linkTarget` 指向 `/ai/tasks`。
+
+### 透视专家 (ReviewAgent)
+干预内容改为摘要提示（"本周学情报告已生成"），`detailMarkdown` 取周报前 500 字，`linkLabel` 为「查看完整周报 →」。
+
+### 3.1 行为分析师习题预生成 🔥
+
+**问题**：v2.3 第一版的行为分析师推荐习题是 `/ai/ask?question=...` 链接。用户点击后等于让 AI 重新回答——行为分析师做了行为分析，却把生成习题内容这份活甩给了答疑导师，体验差。
+
+**修复**：
+1. 注入 `AiAgentService`，调用 LLM 预先生成习题内容（**题目** + **解析** + **答案**）
+2. LLM 响应直接嵌入 `detailMarkdown`，用户在弹窗里读完，不需要跳转
+3. 答案区使用 `<details>` 标签折叠（markdown-it `html:true` 原生渲染），点击「查看答案」展开
+4. `linkTarget`/`linkLabel` 改为补充性质：「去 AI 答疑继续练习 →」
+
+**效果**：前端弹窗内完整展示 3 道题（题目 + 推导过程 + 可折叠答案），用户无需离开弹窗。
+
+---
+
+## 四、文件变更汇总
+
+### 新增（1 个）
+| 文件 | 说明 |
+|------|------|
+| `scripts/migration/V6__agent_detail_markdown.sql` | DDL 加列 |
+
+### 修改（14 个）
+| 文件 | 改动 |
+|------|------|
+| `entity/AiDailyTask.java` | +3 字段 |
+| `entity/AiInterventionLog.java` | +3 字段 |
+| `vo/AiTaskVO.java` | +3 字段 |
+| `vo/InterventionVO.java` | +3 字段 |
+| `util/JsonArrayExtractor.java` | Task 类 +3 字段，tryParse 提取 |
+| `agent/PlannerAgent.java` | LLM prompt 输出 detailMarkdown/linkTarget/linkLabel |
+| `agent/BehaviorAnalysisAgent.java` | LLM 预生成习题 + `<details>` 折叠答案；改名「行为分析师」 |
+| `agent/PsychologyAgent.java` | JSON prompt + fallback；改名「心理树洞」 |
+| `agent/SupervisorAgent.java` | JSON prompt + fallback；改名「铁面教官」 |
+| `agent/ReviewAgent.java` | 干预加周报摘要；改名「透视专家」 |
+| `config/TestDataInitializer.java` | 种子数据补新字段 + agentTips Markdown 详情 |
+| `resources/kaoyan_forum_v2.sql` | 重新导出（1605 行，含 V6 新列） |
+| `doc/CHANGELOG.md` | 本文档 |
+
+### API 契约变更
+- `GET /api/ai/tasks` → 新增 `detailMarkdown`、`linkTarget`、`linkLabel`（向后兼容）
+- `GET /api/ai/interventions` → 新增 `detailMarkdown`、`linkTarget`、`linkLabel`，`agentName` 改为中文（**破坏性变更** — 前端需适配新名称）
+
+---
+
+## 五、升级步骤
+
+```sql
+source scripts/migration/V6__agent_detail_markdown.sql;
+```
+
+重启后端即可。如有前端需同步更新 API 类型定义（`src/types/ai.ts`）和 agentName 映射。
+
+---
+
 > 版本：v2.2  
 > 日期：2026-06-15  
 > 主题：Agent Memory 系统 + 知识库体系重构 + 测试基础设施 + 上岸经验联动 + 学科过滤

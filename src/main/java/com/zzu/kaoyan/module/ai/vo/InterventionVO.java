@@ -10,6 +10,9 @@ public class InterventionVO {
     private String agentName;
     private String triggerReason;
     private String interventionContent;
+    private String detailMarkdown;
+    private String linkTarget;
+    private String linkLabel;
     private String userReaction;
     private LocalDateTime createdAt;
 }

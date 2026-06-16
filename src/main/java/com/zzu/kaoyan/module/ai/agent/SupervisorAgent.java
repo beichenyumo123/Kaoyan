@@ -29,10 +29,15 @@ public class SupervisorAgent {
 
     private static final String SYSTEM_PROMPT =
             """
-            你是一位严厉、极具威严的 408 考研面试组长。
-            如果发现学生近期进度严重落后或懈怠，请生成一句 60 字以内的严厉催学警示，
-            一针见血，直击痛点，促使其警醒。
-            直接输出警示文本，不要带任何前缀或引号。
+            你是一位严厉、极具威严的考研督导，代号「铁面教官」。
+            如果发现学生近期进度严重落后或懈怠，请生成催学警示并附上补漏计划。
+
+            必须且只能输出如下合法的 JSON 格式，不要包含任何 markdown 标签或多余解释：
+            {"message":"催学警示（60字以内，一针见血）","detailMarkdown":"## ⚠️ 完成率预警\\n\\n| 指标 | 数据 |\\n|------|------|\\n| 近期任务 | N 项 |\\n| 已完成 | M 项 |\\n| 完成率 | X% |\\n\\n## 🔧 补漏建议\\n\\n1. 优先完成 HIGH 优先级任务\\n2. 每天至少保证 2 小时学习\\n3. 调整任务量至合理范围"}
+
+            其中：
+            - message: 严厉催学警示，直击痛点，60字以内
+            - detailMarkdown: 包含完成率表格和 3 条具体补漏建议的 Markdown
             """;
 
     private final AiAgentService aiAgentService;
@@ -106,12 +111,29 @@ public class SupervisorAgent {
                         String.format("该考生近3天 %d 项任务仅完成 %d 项，完成率 %.0f%%。",
                                 userTasks.size(), completed, rate * 100));
 
+                // 尝试解析 JSON 格式：{"message":"...", "detailMarkdown":"..."}
+                String message;
+                String detailMarkdown = null;
+                try {
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    java.util.Map<String, String> parsed = mapper.readValue(warning.trim(), java.util.Map.class);
+                    message = parsed.getOrDefault("message", warning.trim());
+                    detailMarkdown = parsed.getOrDefault("detailMarkdown", null);
+                } catch (Exception e) {
+                    // JSON 解析失败，回退到纯文本模式
+                    message = warning.trim();
+                    log.info("SupervisorAgent JSON 解析失败，使用纯文本模式");
+                }
+
                 AiInterventionLog entry2 = new AiInterventionLog();
                 entry2.setUserId(userId);
-                entry2.setAgentName("Supervisor");
+                entry2.setAgentName("铁面教官");
                 entry2.setTriggerReason(String.format("近3天任务完成率%.0f%%（%d/%d）",
                         rate * 100, completed, userTasks.size()));
-                entry2.setInterventionContent(warning.trim());
+                entry2.setInterventionContent(message);
+                entry2.setDetailMarkdown(detailMarkdown);
+                entry2.setLinkTarget("/ai/tasks");
+                entry2.setLinkLabel("去完成任务 →");
                 entry2.setUserReaction("UNREAD");
                 entry2.setCreatedAt(LocalDateTime.now());
                 interventionMapper.insert(entry2);

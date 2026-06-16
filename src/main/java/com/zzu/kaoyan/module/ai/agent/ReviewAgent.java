@@ -136,9 +136,14 @@ public class ReviewAgent {
                     if (report != null && !report.startsWith("【周报生成失败")) {
                         AiInterventionLog logEntity = new AiInterventionLog();
                         logEntity.setUserId(userId);
-                        logEntity.setAgentName("Review");
+                        logEntity.setAgentName("透视专家");
                         logEntity.setTriggerReason("每周自动生成");
-                        logEntity.setInterventionContent(report);
+                        logEntity.setInterventionContent("📊 本周学情报告已生成，点击查看完整分析");
+                        // detailMarkdown: 取周报前500字作为摘要
+                        String summary = report.length() > 500 ? report.substring(0, 500) + "\n\n---\n\n> 查看完整周报 →" : report;
+                        logEntity.setDetailMarkdown(summary);
+                        logEntity.setLinkTarget("/ai/report");
+                        logEntity.setLinkLabel("查看完整周报 →");
                         logEntity.setUserReaction("UNREAD");
                         logEntity.setCreatedAt(LocalDateTime.now());
                         interventionMapper.insert(logEntity);

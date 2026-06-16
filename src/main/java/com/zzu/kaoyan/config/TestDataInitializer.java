@@ -336,6 +336,9 @@ public class TestDataInitializer implements ApplicationRunner {
         t1.setImportance("HIGH");
         t1.setStatus(0);
         t1.setAgentTips("规划伴侣建议：本章是高数核心考点，占分比约15%");
+        t1.setDetailMarkdown("## 复习详情：微分中值定理\n\n### 📚 核心知识点\n- **罗尔定理** — 端点值相等 → 存在导数为零的点\n- **拉格朗日中值定理** — 存在点的切线斜率等于割线斜率\n- **柯西中值定理** — 参数方程形式的中值定理\n\n### 📝 推荐习题\n1. 证明 $\\exists \\xi \\in (0,1)$ 使 $f'(\\xi) = 2\\xi f(\\xi)$\n2. 用拉格朗日定理证明 $|\\sin a - \\sin b| \\le |a - b|$\n\n> 💡 建议用时：**45 分钟** | 易错点：端点条件验证");
+        t1.setLinkTarget("/ai/knowledge?keyword=微分中值定理");
+        t1.setLinkLabel("去刷相关习题 →");
         aiDailyTaskMapper.insert(t1);
 
         // Task 2 — HIGH, 待办
@@ -346,6 +349,9 @@ public class TestDataInitializer implements ApplicationRunner {
         t2.setImportance("HIGH");
         t2.setStatus(0);
         t2.setAgentTips("规划伴侣建议：二叉树是408必考题，建议配合真题练习");
+        t2.setDetailMarkdown("## 复习详情：二叉树遍历\n\n### 📚 核心知识点\n- **前序遍历** — 根 → 左 → 右\n- **中序遍历** — 左 → 根 → 右（BST 得到有序序列）\n- **后序遍历** — 左 → 右 → 根（用于删除/释放）\n- **层序遍历** — BFS，借助队列\n\n### 🔥 408 高频考点\n- 已知前序+中序 → 唯一确定二叉树\n- 线索二叉树的构建\n- 非递归遍历算法\n\n### 📝 推荐习题\n- 王道 3.2 节选择题 1-10\n- 真题 2019-T4, 2021-T5\n\n> 💡 建议用时：**60 分钟** | 易错点：中序+后序也能唯一确定");
+        t2.setLinkTarget("/ai/knowledge?keyword=二叉树遍历");
+        t2.setLinkLabel("去刷408真题 →");
         aiDailyTaskMapper.insert(t2);
 
         // Task 3 — MEDIUM, 已完成
@@ -356,6 +362,9 @@ public class TestDataInitializer implements ApplicationRunner {
         t3.setImportance("MEDIUM");
         t3.setStatus(1);  // 已完成
         t3.setAgentTips("规划伴侣建议：利用艾宾浩斯记忆法，及时回顾前4个List");
+        t3.setDetailMarkdown("## 复习详情：核心词汇 List 5\n\n### 📝 今日词汇（10选5）\n| 单词 | 释义 | 记忆技巧 |\n|------|------|--------|\n| abandon | v.放弃 | a+band+on → 乐队散了 → 放弃 |\n| abstract | adj.抽象的 | abs+tract(拉) → 拉出来的 → 抽象的 |\n| accommodate | v.容纳 | ac+com+mod+ate → 共同模式 |\n\n### 🔁 艾宾浩斯回顾\n- ⏰ List 4 — 已到 1 天回顾节点\n- ⏰ List 2 — 已到 3 天回顾节点\n\n> 💡 建议用时：**20 分钟** | 方法：遮住释义自测");
+        t3.setLinkTarget("/ai/knowledge?keyword=考研英语词汇");
+        t3.setLinkLabel("去背单词 →");
         aiDailyTaskMapper.insert(t3);
 
         // Task 4 — LOW, 待办
@@ -366,9 +375,12 @@ public class TestDataInitializer implements ApplicationRunner {
         t4.setImportance("LOW");
         t4.setStatus(0);
         t4.setAgentTips("规划伴侣建议：每周关注一次即可，避免信息焦虑");
+        t4.setDetailMarkdown("## 院校资讯关注\n\n### 🏫 目标院校：清华大学\n- 计算机技术专硕招生简章\n- 专业课考试科目是否有变动\n- 导师研究方向更新\n\n### 📋 重点关注\n1. 招生人数变化\n2. 专业课参考书目\n3. 推免比例\n\n> 💡 建议用时：**15 分钟** | 每周关注一次即可");
+        t4.setLinkTarget("");
+        t4.setLinkLabel("");
         aiDailyTaskMapper.insert(t4);
 
-        log.info("  📋 已种子 4 条每日任务 (2 HIGH + 1 MEDIUM[已完成] + 1 LOW)");
+        log.info("  📋 已种子 4 条每日任务 (2 HIGH + 1 MEDIUM[已完成] + 1 LOW，含详情 Markdown)");
     }
 
     private void seedChatSessions(Long userId) {
@@ -461,27 +473,31 @@ public class TestDataInitializer implements ApplicationRunner {
     private void seedInterventions(Long userId) {
         LocalDateTime now = LocalDateTime.now();
 
-        // Intervention 1 — Psychology (粉色卡片)
+        // Intervention 1 — 心理树洞 (粉色卡片)
         AiInterventionLog i1 = new AiInterventionLog();
         i1.setUserId(userId);
-        i1.setAgentName("Psychology");  // 心理树洞 → 前端显示粉色
+        i1.setAgentName("心理树洞");
         i1.setInterventionContent("检测到你连续3天学习时长下降，今天是不是有点累了？适当休息也是备考的一部分，调整好状态再出发！");
+        i1.setDetailMarkdown("## 🎯 情绪分析\n\n- **当前情绪**：疲惫 😟\n- **趋势**：近3天学习时长持续下降\n- **分析**：可能进入备考疲劳期\n\n## 💆 放松建议\n\n1. **番茄工作法** — 学习 25 分钟 + 休息 5 分钟，降低单次负荷\n2. **适量运动** — 每天散步 20 分钟，激活身体\n3. **调整目标** — 今天只完成 2 项核心任务即可\n\n> 🌿 考研是马拉松不是短跑，适当调整节奏才能跑完全程");
         i1.setTriggerReason("学习时长连续3天下降超过30%");
         i1.setUserReaction("UNREAD");
         i1.setCreatedAt(now.minusHours(5));
         aiInterventionLogMapper.insert(i1);
 
-        // Intervention 2 — Behavior (蓝色卡片)
+        // Intervention 2 — 行为分析师 (蓝色卡片)
         AiInterventionLog i2 = new AiInterventionLog();
         i2.setUserId(userId);
-        i2.setAgentName("Behavior");  // 行为分析师 → 前端显示蓝色
-        i2.setInterventionContent("你今天浏览了大量「高等数学」相关帖子，建议将这些知识点加入错题复习计划，系统已为你生成3道相关习题。");
+        i2.setAgentName("行为分析师");
+        i2.setInterventionContent("你今天浏览了大量「高等数学」相关帖子，系统已根据你的兴趣生成了 3 道练习题，点击查看详情 →");
+        i2.setDetailMarkdown("## 📊 浏览行为分析\n\n| 指标 | 今日数据 |\n|------|--------|\n| 浏览帖子 | 12 篇 |\n| 搜索次数 | 5 次 |\n| 收藏帖子 | 2 篇 |\n\n### 🔍 关注主题\n\n- **高等数学**（占比 62%）\n- **数据结构**（占比 21%）\n- **C语言**（占比 17%）\n\n---\n\n## 📝 推荐习题\n\n### 1. 极限计算\n**题目**：求 $\\lim_{x \\to 0} \\frac{\\sin 3x - \\sin x}{x}$\n\n**解析**：\n利用和差化积公式：$\\sin A - \\sin B = 2\\cos\\frac{A+B}{2}\\sin\\frac{A-B}{2}$\n\n$\\sin 3x - \\sin x = 2\\cos\\frac{3x+x}{2}\\sin\\frac{3x-x}{2} = 2\\cos 2x \\sin x$\n\n$\\lim_{x \\to 0} \\frac{2\\cos 2x \\sin x}{x} = 2\\cos 0 \\cdot \\lim_{x \\to 0} \\frac{\\sin x}{x} = 2 \\cdot 1 = 2$\n\n<details>\n<summary><b>查看答案</b></summary>\n\n**答案**：$2$\n\n</details>\n\n---\n\n### 2. 拉格朗日中值定理\n**题目**：已知函数 $f(x) = x^3 - 3x$，在区间 $[0, 2]$ 上验证拉格朗日中值定理，并求出满足定理的 $\\xi$ 值。\n\n**解析**：\n$f(x) = x^3 - 3x$ 在 $[0,2]$ 上连续，在 $(0,2)$ 内可导。\n\n$f'(x) = 3x^2 - 3$\n\n由拉格朗日中值定理，存在 $\\xi \\in (0,2)$ 使得：\n\n$f'(\\xi) = \\frac{f(2) - f(0)}{2 - 0} = \\frac{(8-6) - 0}{2} = 1$\n\n$3\\xi^2 - 3 = 1 \\Rightarrow 3\\xi^2 = 4 \\Rightarrow \\xi = \\frac{2}{\\sqrt{3}} \\approx 1.155 \\in (0,2)$\n\n<details>\n<summary><b>查看答案</b></summary>\n\n**答案**：$\\xi = \\frac{2}{\\sqrt{3}}$\n\n</details>\n\n---\n\n### 3. 不定积分换元法\n**题目**：求 $\\int x\\sqrt{1+x^2}\\,dx$\n\n**解析**：\n令 $u = 1 + x^2$，则 $du = 2x\\,dx$，$x\\,dx = \\frac{1}{2}du$\n\n$\\int x\\sqrt{1+x^2}\\,dx = \\int \\sqrt{u} \\cdot \\frac{1}{2}du = \\frac{1}{2} \\cdot \\frac{2}{3}u^{3/2} + C = \\frac{1}{3}(1+x^2)^{3/2} + C$\n\n<details>\n<summary><b>查看答案</b></summary>\n\n**答案**：$\\frac{1}{3}(1+x^2)^{3/2} + C$\n\n</details>\n\n---\n\n> 💡 还想继续练习？[去 AI 答疑 →](/ai/ask?question=高等数学 常见题型)");
+        i2.setLinkTarget("/ai/ask?question=高等数学 常见题型");
+        i2.setLinkLabel("去 AI 答疑继续练习 →");
         i2.setTriggerReason("浏览模式分析：高数相关帖子占比超过80%");
         i2.setUserReaction("UNREAD");
         i2.setCreatedAt(now.minusMinutes(30));
         aiInterventionLogMapper.insert(i2);
 
-        log.info("  🔔 已种子 2 条干预消息 (Psychology粉色 + Behavior蓝色)");
+        log.info("  🔔 已种子 2 条干预消息 (心理树洞 + 行为分析师，含详情 Markdown)");
     }
 
     private void seedReports(Long userId) {

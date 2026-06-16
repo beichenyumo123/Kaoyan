@@ -81,6 +81,9 @@ public final class JsonArrayExtractor {
                 t.setContent(item.get("content"));
                 t.setImportance(item.get("importance"));
                 t.setTips(item.get("tips"));
+                t.setDetailMarkdown(item.get("detailMarkdown"));
+                t.setLinkTarget(item.get("linkTarget"));
+                t.setLinkLabel(item.get("linkLabel"));
                 tasks.add(t);
             }
             return tasks;
@@ -94,6 +97,9 @@ public final class JsonArrayExtractor {
         private String content;
         private String importance;
         private String tips;
+        private String detailMarkdown;
+        private String linkTarget;
+        private String linkLabel;
 
         public String getContent() { return content; }
         public void setContent(String content) { this.content = content; }
@@ -101,5 +107,11 @@ public final class JsonArrayExtractor {
         public void setImportance(String importance) { this.importance = importance; }
         public String getTips() { return tips; }
         public void setTips(String tips) { this.tips = tips; }
+        public String getDetailMarkdown() { return detailMarkdown; }
+        public void setDetailMarkdown(String detailMarkdown) { this.detailMarkdown = detailMarkdown; }
+        public String getLinkTarget() { return linkTarget; }
+        public void setLinkTarget(String linkTarget) { this.linkTarget = linkTarget; }
+        public String getLinkLabel() { return linkLabel; }
+        public void setLinkLabel(String linkLabel) { this.linkLabel = linkLabel; }
     }
 }

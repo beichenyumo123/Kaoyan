@@ -27,5 +27,11 @@ public class AiDailyTask {
 
     private String agentTips;
 
+    private String detailMarkdown;
+
+    private String linkTarget;
+
+    private String linkLabel;
+
     private LocalDateTime createdAt;
 }

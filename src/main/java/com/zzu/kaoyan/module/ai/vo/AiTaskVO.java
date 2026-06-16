@@ -13,5 +13,8 @@ public class AiTaskVO {
     private String importance;
     private Integer status;
     private String agentTips;
+    private String detailMarkdown;
+    private String linkTarget;
+    private String linkLabel;
     private LocalDateTime createdAt;
 }

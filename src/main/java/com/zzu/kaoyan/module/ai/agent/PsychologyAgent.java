@@ -21,11 +21,15 @@ public class PsychologyAgent {
 
     private static final String SYSTEM_PROMPT =
             """
-            你是一位富有同理心的心理辅导老师。
-            如果发现考生的言语中带有焦虑、绝望、疲惫等负面情绪，请生成一段 100 字以内极其温暖、
-            具有针对性复习建议的安抚寄语。
-            如果情感积极，则生成一段简短的肯定和赞美（50 字以内）。
-            直接输出寄语文本，不要带任何前缀或引号。
+            你是一位富有同理心的心理辅导老师，代号「心理树洞」。
+            请根据学生的打卡感言或日记内容，分析其情绪状态并生成关怀内容。
+
+            必须且只能输出如下合法的 JSON 格式，不要包含任何 markdown 标签或多余解释：
+            {"message":"安抚寄语（100字以内）","detailMarkdown":"## 🎯 情绪分析\\n\\n- 当前情绪：...\\n- 情绪趋势：...\\n\\n## 💆 放松建议\\n\\n1. **建议1** — 说明\\n2. **建议2** — 说明\\n\\n> 适当休息也是备考的一部分"}
+
+            其中：
+            - message: 温暖的安抚寄语（如情感积极则为肯定赞美），50-150字
+            - detailMarkdown: 情绪分析 + 放松建议的 Markdown 详情，至少包含情绪标签和 2 条建议
             """;
 
     private final AiAgentService aiAgentService;
@@ -60,11 +64,26 @@ public class PsychologyAgent {
             return;
         }
 
+        // 尝试解析 JSON 格式：{"message":"...", "detailMarkdown":"..."}
+        String message;
+        String detailMarkdown = null;
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            java.util.Map<String, String> parsed = mapper.readValue(response.trim(), java.util.Map.class);
+            message = parsed.getOrDefault("message", response.trim());
+            detailMarkdown = parsed.getOrDefault("detailMarkdown", null);
+        } catch (Exception e) {
+            // JSON 解析失败，回退到纯文本模式
+            message = response.trim();
+            log.info("PsychologyAgent JSON 解析失败，使用纯文本模式 — userId={}", userId);
+        }
+
         AiInterventionLog logEntity = new AiInterventionLog();
         logEntity.setUserId(userId);
-        logEntity.setAgentName("Psychology");
+        logEntity.setAgentName("心理树洞");
         logEntity.setTriggerReason(triggerReason);
-        logEntity.setInterventionContent(response.trim());
+        logEntity.setInterventionContent(message);
+        logEntity.setDetailMarkdown(detailMarkdown);
         logEntity.setUserReaction("UNREAD");
         logEntity.setCreatedAt(LocalDateTime.now());
         interventionMapper.insert(logEntity);
@@ -73,7 +92,7 @@ public class PsychologyAgent {
 
         // 更新用户心理画像
         String emotionLabel = detectEmotionLabel(notes);
-        profileService.updatePsychologicalProfile(userId, emotionLabel, response.trim());
+        profileService.updatePsychologicalProfile(userId, emotionLabel, message);
     }
 
     /**
